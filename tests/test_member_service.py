@@ -1,0 +1,74 @@
+import pytest
+from sqlalchemy import create_engine
+from app.database.models import Base, Staff
+from app.database.connection import get_session
+from app.services.member_service import MemberService
+
+
+@pytest.fixture
+def engine():
+    eng = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(eng)
+    with get_session(eng) as s:
+        s.add(Staff(name="山田"))
+        s.add(Staff(name="鈴木"))
+    return eng
+
+
+@pytest.fixture
+def svc(engine):
+    return MemberService(engine)
+
+
+def test_create_member(svc):
+    data = {
+        "member_number": "9001",
+        "org_name": "㈱テスト商事",
+        "insurance_entries": [
+            {"ins_type": "ippan", "branch_number": "0", "ins_number": "101",
+             "is_tokubetsu": False, "is_ikkatsu": False}
+        ]
+    }
+    m = svc.create(data, "山田")
+    assert m.member_number == "9001"
+    assert len(m.insurance_entries) == 1
+
+
+def test_search_by_keyword(svc):
+    svc.create({"member_number": "9001", "org_name": "㈱テスト商事", "insurance_entries": []}, "山田")
+    svc.create({"member_number": "9002", "org_name": "△△建設", "insurance_entries": []}, "山田")
+    results = svc.search(keyword="テスト")
+    assert len(results) == 1
+    assert results[0].org_name == "㈱テスト商事"
+
+
+def test_search_by_ins_type(svc):
+    svc.create({"member_number": "9001", "org_name": "A社", "insurance_entries": [
+        {"ins_type": "ippan", "branch_number": "0", "ins_number": "101",
+         "is_tokubetsu": False, "is_ikkatsu": False}
+    ]}, "山田")
+    svc.create({"member_number": "9002", "org_name": "B社", "insurance_entries": [
+        {"ins_type": "kensetsu_koyou", "branch_number": "2", "ins_number": "202",
+         "is_tokubetsu": False, "is_ikkatsu": False}
+    ]}, "山田")
+    results = svc.search(ins_types=["ippan"])
+    assert len(results) == 1
+
+
+def test_update_creates_change_record(svc):
+    m = svc.create({"member_number": "9001", "org_name": "旧社名", "insurance_entries": []}, "山田")
+    svc.update(m.id, {"org_name": "新社名", "insurance_entries": []}, "住所変更のため", "山田")
+    changes = svc.get_changes(m.id)
+    assert len(changes) == 1
+    assert changes[0].change_reason == "住所変更のため"
+
+
+def test_withdraw_and_reactivate(svc):
+    from datetime import date
+    m = svc.create({"member_number": "9001", "org_name": "㈱テスト", "insurance_entries": []}, "山田")
+    svc.withdraw(m.id, date(2026, 6, 1), "自己都合", "山田")
+    results = svc.search(active_only=True)
+    assert len(results) == 0
+    svc.reactivate(m.id, "山田")
+    results = svc.search(active_only=True)
+    assert len(results) == 1
