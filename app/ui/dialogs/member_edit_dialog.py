@@ -112,12 +112,16 @@ class MemberEditDialog(QDialog):
         form_layout.addWidget(ins_group)
 
         # 変更理由
-        reason_group = QGroupBox("変更理由（必須）")
-        rl = QVBoxLayout(reason_group)
+        self._reason_group = QGroupBox("変更理由（必須）")
+        rl = QVBoxLayout(self._reason_group)
         self._f_reason = QLineEdit()
         self._f_reason.setPlaceholderText("例：住所変更、保険番号追加")
         rl.addWidget(self._f_reason)
-        form_layout.addWidget(reason_group)
+        form_layout.addWidget(self._reason_group)
+
+        # 新規作成時は変更理由を非表示
+        if not self._member_id:
+            self._reason_group.setVisible(False)
 
         scroll.setWidget(container)
         main_layout.addWidget(scroll)
@@ -205,12 +209,12 @@ class MemberEditDialog(QDialog):
         if not data["org_name"]:
             QMessageBox.warning(self, "入力エラー", "事業所名は必須です。")
             return
-        reason = self._f_reason.text().strip()
-        if not reason:
-            QMessageBox.warning(self, "入力エラー", "変更理由を入力してください。")
-            return
         try:
             if self._member_id:
+                reason = self._f_reason.text().strip()
+                if not reason:
+                    QMessageBox.warning(self, "入力エラー", "変更理由を入力してください。")
+                    return
                 self._svc.update(self._member_id, data, reason, self._staff_name)
             else:
                 self._svc.create(data, self._staff_name)
