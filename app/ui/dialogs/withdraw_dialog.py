@@ -1,0 +1,64 @@
+# app/ui/dialogs/withdraw_dialog.py
+from datetime import date
+from PyQt6.QtWidgets import (
+    QDialog, QVBoxLayout, QHBoxLayout, QFormLayout,
+    QDateEdit, QLineEdit, QPushButton, QMessageBox, QGroupBox,
+)
+from PyQt6.QtCore import QDate
+from app.services.member_service import MemberService
+
+
+class WithdrawDialog(QDialog):
+    def __init__(self, engine, staff_name: str, member_id: int, parent=None):
+        super().__init__(parent)
+        self._engine = engine
+        self._staff_name = staff_name
+        self._member_id = member_id
+        self._svc = MemberService(engine)
+        self.withdrawn = False
+        self.setWindowTitle("脱会処理")
+        self.setFixedSize(400, 200)
+        self._build_ui()
+
+    def _build_ui(self):
+        layout = QVBoxLayout(self)
+        grp = QGroupBox("脱会情報を入力")
+        fl = QFormLayout(grp)
+        self._date_edit = QDateEdit(QDate.currentDate())
+        self._date_edit.setCalendarPopup(True)
+        self._reason_edit = QLineEdit()
+        self._reason_edit.setPlaceholderText("脱会理由を入力してください")
+        fl.addRow("脱会日：", self._date_edit)
+        fl.addRow("脱会理由：", self._reason_edit)
+        layout.addWidget(grp)
+
+        btn_row = QHBoxLayout()
+        ok_btn = QPushButton("脱会処理を実行")
+        ok_btn.setDefault(True)
+        ok_btn.clicked.connect(self._on_ok)
+        cancel_btn = QPushButton("キャンセル")
+        cancel_btn.clicked.connect(self.reject)
+        btn_row.addStretch()
+        btn_row.addWidget(cancel_btn)
+        btn_row.addWidget(ok_btn)
+        layout.addLayout(btn_row)
+
+    def _on_ok(self):
+        reason = self._reason_edit.text().strip()
+        if not reason:
+            QMessageBox.warning(self, "入力エラー", "脱会理由を入力してください。")
+            return
+        qd = self._date_edit.date()
+        withdrawn_at = date(qd.year(), qd.month(), qd.day())
+        reply = QMessageBox.question(
+            self, "確認", "脱会処理を実行してよいですか？",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+        )
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+        try:
+            self._svc.withdraw(self._member_id, withdrawn_at, reason, self._staff_name)
+            self.withdrawn = True
+            self.accept()
+        except Exception as e:
+            QMessageBox.critical(self, "エラー", str(e))
