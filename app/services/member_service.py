@@ -23,10 +23,10 @@ class MemberService:
     ) -> list:
         with get_session(self._engine) as session:
             q = session.query(Member)
-            if active_only:
-                q = q.filter(Member.is_active == True)
-            elif inactive_only:
+            if inactive_only:
                 q = q.filter(Member.is_active == False)
+            elif active_only:
+                q = q.filter(Member.is_active == True)
             if keyword:
                 kw = f"%{keyword}%"
                 q = q.filter(
