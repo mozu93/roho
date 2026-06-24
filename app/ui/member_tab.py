@@ -145,4 +145,15 @@ class MemberTab(QWidget):
         pass  # Plan 3 で実装
 
     def _on_export(self):
-        pass  # Task 5 で実装
+        from PyQt6.QtWidgets import QFileDialog
+        from app.services.import_service import ExportService
+        path, _ = QFileDialog.getSaveFileName(self, "Excel出力", "加入者名簿.xlsx", "Excel (*.xlsx)")
+        if not path:
+            return
+        try:
+            ExportService(self._engine).export_excel(self._members, path)
+            from PyQt6.QtWidgets import QMessageBox
+            QMessageBox.information(self, "完了", f"{len(self._members)}件を出力しました。")
+        except Exception as e:
+            from PyQt6.QtWidgets import QMessageBox
+            QMessageBox.critical(self, "エラー", str(e))
