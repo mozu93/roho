@@ -35,7 +35,7 @@ DEFAULT_COL_MAP = {
     "ins_ringyo_number":          26,  # W
     "ins_ringyo_tokubetsu":       27,
     "ins_ringyo_ikkatsu":         28,
-    "ins_kensetsu_genba_branch":  29,  # X
+    "ins_kensetsu_genba_branch":  29,
     "ins_kensetsu_genba_number":  30,  # Y
     "ins_kensetsu_genba_tokubetsu": 31,
     "ins_kensetsu_genba_ikkatsu": 32,
@@ -43,8 +43,8 @@ DEFAULT_COL_MAP = {
     "ins_kensetsu_jimusho_number": 34,  # AA
     "ins_kensetsu_jimusho_tokubetsu": 35,
     "ins_kensetsu_jimusho_ikkatsu": 36,
-    "employment_ins_no": 28,  # AC（フラグ列挿入後はずれるため要確認）
-    "note":              29,  # AD
+    "employment_ins_no": 16,  # Q
+    "note":              37,  # AM
 }
 
 INS_TYPE_KEYS = [

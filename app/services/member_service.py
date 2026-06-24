@@ -36,16 +36,16 @@ class MemberService:
                     | Member.tel.like(kw)
                 )
             if ins_types:
-                q = q.join(Member.insurance_entries).filter(
-                    InsuranceEntry.ins_type.in_(ins_types)
+                q = q.filter(
+                    Member.insurance_entries.any(InsuranceEntry.ins_type.in_(ins_types))
                 )
             if tokubetsu_only:
-                q = q.join(Member.insurance_entries, isouter=True).filter(
-                    InsuranceEntry.is_tokubetsu == True
+                q = q.filter(
+                    Member.insurance_entries.any(InsuranceEntry.is_tokubetsu == True)
                 )
             if ikkatsu_only:
-                q = q.join(Member.insurance_entries, isouter=True).filter(
-                    InsuranceEntry.is_ikkatsu == True
+                q = q.filter(
+                    Member.insurance_entries.any(InsuranceEntry.is_ikkatsu == True)
                 )
             results = q.distinct().order_by(Member.member_number).all()
             for m in results:

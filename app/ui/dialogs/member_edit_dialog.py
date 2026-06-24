@@ -221,4 +221,8 @@ class MemberEditDialog(QDialog):
             self.saved = True
             self.accept()
         except Exception as e:
-            QMessageBox.critical(self, "保存エラー", str(e))
+            from sqlalchemy.exc import IntegrityError
+            if isinstance(e, IntegrityError):
+                QMessageBox.critical(self, "保存エラー", "同じ会員No.が既に存在します。別の会員No.を入力してください。")
+            else:
+                QMessageBox.critical(self, "保存エラー", str(e))
