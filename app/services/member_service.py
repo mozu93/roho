@@ -19,11 +19,14 @@ class MemberService:
         tokubetsu_only: bool = False,
         ikkatsu_only: bool = False,
         active_only: bool = True,
+        inactive_only: bool = False,
     ) -> list:
         with get_session(self._engine) as session:
             q = session.query(Member)
             if active_only:
                 q = q.filter(Member.is_active == True)
+            elif inactive_only:
+                q = q.filter(Member.is_active == False)
             if keyword:
                 kw = f"%{keyword}%"
                 q = q.filter(

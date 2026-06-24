@@ -72,3 +72,13 @@ def test_withdraw_and_reactivate(svc):
     svc.reactivate(m.id, "山田")
     results = svc.search(active_only=True)
     assert len(results) == 1
+
+
+def test_search_inactive_only(svc):
+    from datetime import date
+    m = svc.create({"member_number": "9001", "org_name": "㈱テスト商事", "insurance_entries": []}, "山田")
+    svc.withdraw(m.id, date.today(), "廃業のため", "山田")
+    svc.create({"member_number": "9002", "org_name": "△△建設", "insurance_entries": []}, "山田")
+    results = svc.search(inactive_only=True)
+    assert len(results) == 1
+    assert results[0].member_number == "9001"
