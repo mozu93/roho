@@ -1,0 +1,49 @@
+# .github/workflows/release.yml
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt pyinstaller pillow
+
+      - name: Get version from tag
+        id: get_version
+        run: |
+          $version = "${{ github.ref_name }}".TrimStart("v")
+          echo "VERSION=$version" >> $env:GITHUB_OUTPUT
+
+      - name: Generate icon
+        run: python generate_icon.py
+
+      - name: Build with PyInstaller
+        run: pyinstaller rouho.spec --clean
+
+      - name: Install Inno Setup
+        run: choco install innosetup --no-progress -y
+
+      - name: Build installer
+        run: |
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer\setup.iss
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: installer_output/Rouho_Setup_${{ steps.get_version.outputs.VERSION }}.exe
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
