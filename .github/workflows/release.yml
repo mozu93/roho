@@ -45,8 +45,10 @@ jobs:
         run: choco install innosetup --no-progress -y
 
       - name: Build installer
+        env:
+          APP_VERSION: ${{ steps.get_version.outputs.VERSION }}
         run: |
-          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" /DMyAppVersion=${{ steps.get_version.outputs.VERSION }} installer\setup.iss
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "/DMyAppVersion=$env:APP_VERSION" installer\setup.iss
 
       - name: Generate checksum
         run: |
