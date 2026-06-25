@@ -12,6 +12,7 @@ from app.ui.withdrawn_tab import WithdrawnTab
 from app.ui.label_tab import LabelTab
 from app.ui.email_tab import EmailTab
 from app.ui.settings_tab import SettingsTab
+from app.ui.notification_banner import NotificationBanner
 from app.version import __version__
 
 
@@ -73,6 +74,10 @@ class MainWindow(QMainWindow):
         h_layout.addWidget(logout_btn)
         root.addWidget(header)
 
+        # 新着バナー（ヘッダーとタブウィジェットの間）
+        self._banner = NotificationBanner(self._engine, self._config)
+        root.addWidget(self._banner)
+
         # タブウィジェット
         tabs = QTabWidget()
         tabs.addTab(MemberTab(self._engine, self._config), "名簿")
@@ -89,3 +94,4 @@ class MainWindow(QMainWindow):
         self._config.save(self._config_path)
         self._show_login_dialog()
         self._staff_label.setText(f"ログイン中：{self._current_staff}　さん")
+        self._banner.refresh()
