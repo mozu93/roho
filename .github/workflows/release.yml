@@ -48,10 +48,18 @@ jobs:
         run: |
           & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer\setup.iss
 
+      - name: Generate checksum
+        run: |
+          $file = Get-ChildItem "installer_output\*.exe" | Select-Object -First 1
+          $hash = (Get-FileHash $file.FullName -Algorithm SHA256).Hash.ToLower()
+          "$hash  $($file.Name)" | Out-File -FilePath "installer_output\checksums.txt" -Encoding ascii
+
       - name: Create Release
         uses: softprops/action-gh-release@v2  # TODO: pin to commit SHA for supply-chain safety
         with:
-          files: installer_output/Rouho_Setup_${{ steps.get_version.outputs.VERSION }}.exe
+          files: |
+            installer_output/Rouho_Setup_${{ steps.get_version.outputs.VERSION }}.exe
+            installer_output/checksums.txt
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

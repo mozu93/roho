@@ -1,3 +1,4 @@
+import hashlib
 import os
 import subprocess
 import tempfile
@@ -19,19 +20,47 @@ def check_for_update(repo: str, current_version: str, timeout: int = 8) -> dict 
             return None
         if Version(latest_tag) <= Version(current_version):
             return None
-        # インストーラーのダウンロードURL（.exe ファイル）
         download_url = ""
+        checksum_url = ""
         for asset in data.get("assets", []):
-            if asset.get("name", "").endswith(".exe"):
+            name = asset.get("name", "")
+            if name.endswith(".exe"):
                 download_url = asset["browser_download_url"]
-                break
+            elif name == "checksums.txt":
+                checksum_url = asset["browser_download_url"]
         return {
             "version": latest_tag,
             "download_url": download_url,
+            "checksum_url": checksum_url,
             "body": data.get("body", ""),
         }
     except Exception:
         return None
+
+
+def verify_installer(path: str, checksum_url: str, timeout: int = 30) -> bool:
+    """ダウンロード済みインストーラーの SHA-256 をリリースの checksums.txt と照合する。"""
+    if not checksum_url:
+        return False
+    try:
+        resp = requests.get(checksum_url, timeout=timeout)
+        resp.raise_for_status()
+        installer_name = os.path.basename(path).lower()
+        expected_hash = ""
+        for line in resp.text.splitlines():
+            parts = line.split()
+            if len(parts) == 2 and parts[1].lower() == installer_name:
+                expected_hash = parts[0].lower()
+                break
+        if not expected_hash:
+            return False
+        sha256 = hashlib.sha256()
+        with open(path, "rb") as f:
+            for chunk in iter(lambda: f.read(65536), b""):
+                sha256.update(chunk)
+        return sha256.hexdigest() == expected_hash
+    except Exception:
+        return False
 
 
 def download_installer(url: str, dest_path: str, progress_cb=None) -> str:
