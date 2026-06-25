@@ -256,7 +256,7 @@ class MemberTab(QWidget):
                     elif entry.is_tokubetsu:
                         item.setBackground(QBrush(QColor(226, 240, 217)))  # 薄い緑
                     elif entry.is_ikkatsu:
-                        item.setBackground(QBrush(QColor(221, 235, 247)))  # 薄い青
+                        item.setBackground(QBrush(QColor(255, 224, 178)))  # 薄いオレンジ
                 self._table.setItem(row, 15 + col_idx, item)
             self._table.setItem(row, 20, SortableTableWidgetItem("●" if has_tokubetsu else ""))
             self._table.setItem(row, 21, SortableTableWidgetItem("●" if has_ikkatsu else ""))
