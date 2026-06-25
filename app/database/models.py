@@ -115,7 +115,7 @@ class ActivityConfirmation(Base):
     id = Column(Integer, primary_key=True)
     activity_log_id = Column(Integer, ForeignKey("activity_logs.id"), nullable=False)
     staff_id = Column(Integer, ForeignKey("staff.id"), nullable=False)
-    confirmed_at = Column(DateTime, nullable=False, default=datetime.now)
+    confirmed_at = Column(DateTime, nullable=True, default=None)  # None=未読
 
     activity_log = relationship("ActivityLog", back_populates="confirmations")
 
