@@ -1,4 +1,5 @@
 # app/ui/dialogs/activity_log_dialog.py
+import html
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QListWidget, QListWidgetItem,
     QTextEdit, QLabel, QPushButton, QGroupBox, QScrollArea,
@@ -88,10 +89,11 @@ class ActivityLogDialog(QDialog):
             entry_layout = QVBoxLayout(entry)
             entry_layout.setContentsMargins(6, 4, 6, 4)
             header = QLabel(
-                f"<b>{log.logged_at.strftime('%Y-%m-%d %H:%M')}</b>　{log.logged_by}　"
-                f"<span style='color:#666'>[{cat_names}]</span>"
+                f"<b>{log.logged_at.strftime('%Y-%m-%d %H:%M')}</b>　{html.escape(log.logged_by)}　"
+                f"<span style='color:#666'>[{html.escape(cat_names)}]</span>"
             )
             content = QLabel(log.content)
+            content.setTextFormat(Qt.TextFormat.PlainText)
             content.setWordWrap(True)
             entry_layout.addWidget(header)
             entry_layout.addWidget(content)
