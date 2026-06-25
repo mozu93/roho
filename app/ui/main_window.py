@@ -81,7 +81,7 @@ class MainWindow(QMainWindow):
         root.addWidget(self._banner)
 
         # アップデートバナー
-        GITHUB_REPO = "mozu93/rouho"
+        GITHUB_REPO = "mozu93/roho"
         self._update_banner = UpdateBanner(GITHUB_REPO, __version__)
         root.addWidget(self._update_banner)
 
