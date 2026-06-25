@@ -1,5 +1,4 @@
 from PIL import Image, ImageDraw, ImageFont
-import struct, zlib, io
 
 def create_icon():
     """シンプルな青い四角アイコンを生成する"""
