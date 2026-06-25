@@ -30,11 +30,10 @@ class LabelService:
     ) -> list[Member]:
         with get_session(self._engine) as session:
             q = session.query(Member)
-            if active_only and not include_withdrawn:
+            if include_withdrawn:
+                pass  # 全件（脱会済みも含む）
+            elif active_only:
                 q = q.filter(Member.is_active == True)
-            elif include_withdrawn and not active_only:
-                pass  # 全件
-            # active_only=True, include_withdrawn=True → active のみ（デフォルト）
             if ins_types:
                 q = q.filter(
                     Member.insurance_entries.any(InsuranceEntry.ins_type.in_(ins_types))

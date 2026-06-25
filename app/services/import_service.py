@@ -43,7 +43,7 @@ DEFAULT_COL_MAP = {
     "ins_kensetsu_jimusho_number": 34,  # AA
     "ins_kensetsu_jimusho_tokubetsu": 35,
     "ins_kensetsu_jimusho_ikkatsu": 36,
-    "employment_ins_no": 16,  # Q
+    "employment_ins_no": None,  # 要確認: 実際の入力Excelの列番号を設定すること
     "note":              37,  # AM
 }
 
