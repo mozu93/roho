@@ -51,15 +51,15 @@ class SortableTableWidgetItem(QTableWidgetItem):
 BRANCH_LABELS = {"ippan": "0", "kensetsu_koyou": "2", "ringyo": "4",
                  "kensetsu_genba": "5", "kensetsu_jimusho": "6"}
 COLS = [
-    "事業所コード", "会員No.", "種別", "事業所名", "フリガナ", "所属・役職",
+    "管理No.", "会", "会員No.", "事業所名", "フリガナ", "所属・役職",
     "代表者名", "代表者フリガナ", "メール", "電話番号", "FAX番号", "郵便番号", "住所",
     "郵送先郵便番号", "郵送先住所", "郵送先宛名", "雇用保険事業所番号",
     "0", "2", "4", "5", "6", "特別", "一括", "最終対応日", "メモ"
 ]
 # 列インデックス定数
 _COL_COMPANY_CODE = 0
-_COL_MEMBER_NUMBER = 1
-_COL_IS_MEMBER = 2
+_COL_IS_MEMBER = 1
+_COL_MEMBER_NUMBER = 2
 _COL_ORG_NAME = 3
 
 
@@ -235,9 +235,9 @@ class MemberTab(QWidget):
             code_item = SortableTableWidgetItem(str(m.company_code) if m.company_code else "")
             code_item.setData(Qt.ItemDataRole.UserRole, m.id)
             self._table.setItem(row, _COL_COMPANY_CODE, code_item)
-            self._table.setItem(row, _COL_MEMBER_NUMBER, SortableTableWidgetItem(m.member_number or ""))
             is_mem = getattr(m, "is_member", True)
-            self._table.setItem(row, _COL_IS_MEMBER, SortableTableWidgetItem("会員" if is_mem else "非会員"))
+            self._table.setItem(row, _COL_IS_MEMBER, SortableTableWidgetItem("○" if is_mem else ""))
+            self._table.setItem(row, _COL_MEMBER_NUMBER, SortableTableWidgetItem(m.member_number or ""))
             self._table.setItem(row, _COL_ORG_NAME, SortableTableWidgetItem(m.org_name))
             self._table.setItem(row, 4, SortableTableWidgetItem(m.org_kana or ""))
             self._table.setItem(row, 5, SortableTableWidgetItem(m.dept_title or ""))
