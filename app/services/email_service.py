@@ -31,7 +31,8 @@ class EmailService:
 
     def _save_cache(self):
         if self._cache.has_state_changed:
-            with open(TOKEN_CACHE_FILE, "wb") as f:
+            fd = os.open(TOKEN_CACHE_FILE, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+            with os.fdopen(fd, "wb") as f:
                 f.write(self._cache.serialize())
 
     def get_token(self) -> str:
