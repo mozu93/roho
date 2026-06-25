@@ -7,7 +7,8 @@ from PyQt6.QtWidgets import (
     QComboBox,
 )
 from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QAction, QColor, QBrush
+from PyQt6.QtGui import QAction, QColor, QBrush, QFont
+from PyQt6.QtWidgets import QApplication
 from app.services.member_service import MemberService, INS_TYPES
 from app.services.activity_service import ActivityService
 from app.ui.dialogs.member_edit_dialog import MemberEditDialog
@@ -117,6 +118,12 @@ class MemberTab(QWidget):
         self._table.itemDoubleClicked.connect(self._on_edit)
         self._table.itemSelectionChanged.connect(self._on_selection_changed)
         self._table.setSortingEnabled(True)
+        self._table.setAlternatingRowColors(True)
+        tbl_font = QFont(QApplication.instance().font())
+        tbl_font.setPointSize(tbl_font.pointSize() + 2)
+        self._table.setFont(tbl_font)
+        self._table.verticalHeader().setDefaultSectionSize(30)
+        self._table.horizontalHeader().setMinimumSectionSize(30)
         content_layout.addWidget(self._table, stretch=2)
 
         # 対応履歴パネル

@@ -56,6 +56,22 @@ QPushButton#sendButton:disabled {
     border-color: #bfdbfe;
     color: white;
 }
+QTableWidget {
+    alternate-background-color: #f0f5fb;
+    gridline-color: #d1d9e0;
+}
+QTableWidget QHeaderView::section {
+    background: #3d5a80;
+    color: white;
+    font-weight: bold;
+    padding: 5px 6px;
+    border: none;
+    border-right: 1px solid #506e96;
+    border-bottom: 2px solid #2c4260;
+}
+QTableWidget QHeaderView::section:first {
+    border-left: none;
+}
 """
 
 

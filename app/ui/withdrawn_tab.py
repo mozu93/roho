@@ -1,7 +1,8 @@
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QTableWidget,
-    QTableWidgetItem, QPushButton, QMessageBox, QHeaderView,
+    QTableWidgetItem, QPushButton, QMessageBox, QHeaderView, QApplication,
 )
+from PyQt6.QtGui import QFont
 from app.services.member_service import MemberService
 
 
@@ -22,6 +23,11 @@ class WithdrawnTab(QWidget):
         self._table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self._table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self._table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
+        self._table.setAlternatingRowColors(True)
+        tbl_font = QFont(QApplication.instance().font())
+        tbl_font.setPointSize(tbl_font.pointSize() + 2)
+        self._table.setFont(tbl_font)
+        self._table.verticalHeader().setDefaultSectionSize(30)
         layout.addWidget(self._table)
         btn_row = QHBoxLayout()
         reactivate_btn = QPushButton("再加入")
