@@ -1,6 +1,6 @@
 # app/ui/settings_tab.py
 from PyQt6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QGroupBox, QListWidget,
+    QWidget, QVBoxLayout, QHBoxLayout, QFormLayout, QGroupBox, QListWidget,
     QListWidgetItem, QLineEdit, QPushButton, QMessageBox,
 )
 from app.database.connection import get_session
@@ -56,6 +56,20 @@ class SettingsTab(QWidget):
         cat_row.addWidget(cat_del_btn)
         cat_layout.addLayout(cat_row)
         layout.addWidget(cat_group)
+
+        # M365設定
+        m365_group = QGroupBox("Microsoft 365設定")
+        m365_layout = QFormLayout(m365_group)
+        self._tenant_edit = QLineEdit(self._config.m365_tenant_id)
+        self._client_id_edit = QLineEdit(self._config.m365_client_id)
+        self._test_addr_edit = QLineEdit(self._config.m365_test_address)
+        save_m365_btn = QPushButton("保存")
+        save_m365_btn.clicked.connect(self._on_save_m365)
+        m365_layout.addRow("テナントID：", self._tenant_edit)
+        m365_layout.addRow("クライアントID：", self._client_id_edit)
+        m365_layout.addRow("テスト送信先：", self._test_addr_edit)
+        m365_layout.addRow("", save_m365_btn)
+        layout.addWidget(m365_group)
         layout.addStretch()
 
     def _refresh_staff(self):
@@ -117,3 +131,12 @@ class SettingsTab(QWidget):
         if reply == QMessageBox.StandardButton.Yes:
             self._svc.delete_category(item.data(256))
             self._refresh_categories()
+
+    def _on_save_m365(self):
+        import os
+        self._config.m365_tenant_id = self._tenant_edit.text().strip()
+        self._config.m365_client_id = self._client_id_edit.text().strip()
+        self._config.m365_test_address = self._test_addr_edit.text().strip()
+        config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "app_config.json")
+        self._config.save(os.path.normpath(config_path))
+        QMessageBox.information(self, "保存", "Microsoft 365設定を保存しました。")
