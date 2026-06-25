@@ -1,6 +1,6 @@
 from datetime import datetime
 from app.database.connection import get_session
-from app.database.models import SendJob, SendLog, Staff, EmailTemplate
+from app.database.models import SendJob, SendLog, Staff
 
 
 class SendJobService:
@@ -46,7 +46,6 @@ class SendJobService:
         results = {"success": 0, "error": 0, "skip": 0}
 
         # トークンを一度だけ取得
-        from app.services.email_service import DeviceCodeRequired
         app_obj = email_svc._get_app()
         accounts = app_obj.get_accounts()
         if not accounts:
@@ -59,9 +58,10 @@ class SendJobService:
         token = token_result["access_token"]
 
         with get_session(self._engine) as session:
-            job = session.get(SendJob, job_id)
-            template = session.get(EmailTemplate, job.template_id)
+            job_obj = session.get(SendJob, job_id)
+            template_id = job_obj.template_id
             session.expunge_all()
+        template = template_svc.get(template_id)
 
         for idx, member in enumerate(targets):
             if progress_callback:
