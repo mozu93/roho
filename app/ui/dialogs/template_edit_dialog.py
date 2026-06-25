@@ -34,7 +34,7 @@ class TemplateEditDialog(QDialog):
         hint = QLabel(
             "使用できるプレースホルダー：{事業所名} {代表者名} {会員No.} {所属・役職}"
         )
-        hint.setStyleSheet("color:#666; font-size:11px;")
+        hint.setStyleSheet("color:#666; font-size:9pt;")
         layout.addWidget(hint)
 
         btn_row = QHBoxLayout()

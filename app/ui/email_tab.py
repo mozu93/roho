@@ -141,7 +141,7 @@ class EmailTab(QWidget):
         test_btn = QPushButton("テスト送信")
         test_btn.clicked.connect(self._on_test_send)
         send_btn = QPushButton("送信実行")
-        send_btn.setStyleSheet("background:#2563eb; color:white; font-weight:bold;")
+        send_btn.setObjectName("sendButton")
         send_btn.clicked.connect(self._on_send)
         btn_row.addWidget(auth_btn)
         btn_row.addStretch()
