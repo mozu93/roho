@@ -28,7 +28,7 @@ def create_icon():
         sizes=[(s, s) for s in sizes],
         append_images=images[1:],
     )
-    print("アイコン生成完了: assets/icons/rouho.ico")
+    print("Icon generated: assets/icons/rouho.ico")
 
 if __name__ == "__main__":
     create_icon()
