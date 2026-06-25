@@ -78,7 +78,8 @@ class EmailService:
                 raise RuntimeError("未認証です。先にサインインしてください。")
             result = app.acquire_token_silent(SCOPES, account=accounts[0])
             if not result or "access_token" not in result:
-                raise RuntimeError("トークンの取得に失敗しました。再サインインしてください。")
+                err = (result.get("error_description", "不明") if result else "応答なし")
+                raise RuntimeError(f"トークン取得失敗: {err}。再サインインしてください。")
             token = result["access_token"]
 
         message = {
