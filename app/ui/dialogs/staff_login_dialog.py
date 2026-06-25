@@ -20,6 +20,7 @@ class StaffLoginDialog(QDialog):
         layout = QVBoxLayout(self)
         layout.addWidget(QLabel("担当者："))
         self._combo = QComboBox()
+        self._combo.setEditable(True)
         layout.addWidget(self._combo)
         btn_row = QHBoxLayout()
         ok_btn = QPushButton("OK")
@@ -43,7 +44,15 @@ class StaffLoginDialog(QDialog):
     def _on_ok(self):
         name = self._combo.currentText().strip()
         if not name:
-            QMessageBox.warning(self, "エラー", "担当者を選択してください。")
+            QMessageBox.warning(self, "エラー", "担当者名を入力または選択してください。")
             return
+            
+        with get_session(self._engine) as session:
+            staff = session.query(Staff).filter_by(name=name).first()
+            if not staff:
+                staff = Staff(name=name, is_active=True)
+                session.add(staff)
+                # Session is automatically committed by get_session
+
         self.selected_name = name
         self.accept()

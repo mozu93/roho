@@ -9,6 +9,7 @@ from app.services.member_service import MemberService, INS_TYPES
 from app.ui.dialogs.member_edit_dialog import MemberEditDialog
 from app.ui.dialogs.member_history_dialog import MemberHistoryDialog
 from app.ui.dialogs.withdraw_dialog import WithdrawDialog
+from app.ui.dialogs.import_dialog import ImportDialog
 
 BRANCH_LABELS = {"ippan": "0", "kensetsu_koyou": "2", "ringyo": "4",
                  "kensetsu_genba": "5", "kensetsu_jimusho": "6"}
@@ -75,9 +76,11 @@ class MemberTab(QWidget):
         history_btn.clicked.connect(self._on_history)
         activity_btn = QPushButton("対応履歴")
         activity_btn.clicked.connect(self._on_activity)
+        import_btn = QPushButton("Excelインポート")
+        import_btn.clicked.connect(self._on_import)
         export_btn = QPushButton("Excel出力")
         export_btn.clicked.connect(self._on_export)
-        for btn in [add_btn, edit_btn, withdraw_btn, history_btn, activity_btn, export_btn]:
+        for btn in [add_btn, edit_btn, withdraw_btn, history_btn, activity_btn, import_btn, export_btn]:
             btn_row.addWidget(btn)
         btn_row.addStretch()
         layout.addLayout(btn_row)
@@ -150,6 +153,11 @@ class MemberTab(QWidget):
             self._engine, m.id, self._config.last_staff_name, m.org_name, parent=self
         ).exec()
         self._refresh()  # 最終対応日更新のため
+
+    def _on_import(self):
+        dlg = ImportDialog(self._engine, self._config.last_staff_name, parent=self)
+        if dlg.exec() == ImportDialog.DialogCode.Accepted:
+            self._refresh()
 
     def _on_export(self):
         from PyQt6.QtWidgets import QFileDialog
