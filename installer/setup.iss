@@ -1,7 +1,9 @@
 ; installer/setup.iss
 #define MyAppName "労働保険名簿管理システム"
 #define MyAppExeName "Rouho.exe"
-#define MyAppVersion GetFileVersion("..\dist\Rouho\Rouho.exe")
+#ifndef MyAppVersion
+  #define MyAppVersion "0.0.0"
+#endif
 #define MyOutputBase "Rouho_Setup"
 
 [Setup]
