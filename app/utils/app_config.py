@@ -10,6 +10,7 @@ class AppConfig:
     m365_tenant_id: str = ""
     m365_client_id: str = ""
     m365_test_address: str = ""
+    hidden_columns: list[str] = field(default_factory=list)
 
     @classmethod
     def load(cls, path: str) -> "AppConfig":

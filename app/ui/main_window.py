@@ -87,7 +87,7 @@ class MainWindow(QMainWindow):
 
         # タブウィジェット
         self._tabs = QTabWidget()
-        self._tabs.addTab(MemberTab(self._engine, self._config), "名簿")
+        self._tabs.addTab(MemberTab(self._engine, self._config, self._config_path), "名簿")
         self._tabs.addTab(WithdrawnTab(self._engine, self._config), "脱会済み")
         self._tabs.addTab(LabelTab(self._engine, self._config), "ラベル出力")
         self._tabs.addTab(EmailTab(self._engine, self._config), "メール送信")
