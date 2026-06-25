@@ -1,11 +1,15 @@
+import html
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLineEdit,
     QCheckBox, QTableWidget, QTableWidgetItem,
     QPushButton, QLabel, QHeaderView, QMenu,
+    QGroupBox, QScrollArea, QTextEdit, QMessageBox,
+    QComboBox,
 )
 from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QAction
+from PyQt6.QtGui import QAction, QColor, QBrush
 from app.services.member_service import MemberService, INS_TYPES
+from app.services.activity_service import ActivityService
 from app.ui.dialogs.member_edit_dialog import MemberEditDialog
 from app.ui.dialogs.member_history_dialog import MemberHistoryDialog
 from app.ui.dialogs.withdraw_dialog import WithdrawDialog
@@ -28,6 +32,7 @@ class MemberTab(QWidget):
         self._config = config
         self._config_path = config_path
         self._svc = MemberService(engine)
+        self._activity_svc = ActivityService(engine)
         self._members = []
         self._build_ui()
         self._apply_column_visibility()
@@ -67,6 +72,9 @@ class MemberTab(QWidget):
         filter_row.addStretch()
         layout.addLayout(filter_row)
 
+        # 中央の分割エリア（テーブルと対応履歴パネル）
+        content_layout = QHBoxLayout()
+
         # 一覧テーブル
         self._table = QTableWidget(0, len(COLS))
         self._table.setHorizontalHeaderLabels(COLS)
@@ -76,7 +84,70 @@ class MemberTab(QWidget):
         self._table.horizontalHeader().setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self._table.horizontalHeader().customContextMenuRequested.connect(self._show_column_menu)
         self._table.itemDoubleClicked.connect(self._on_edit)
-        layout.addWidget(self._table)
+        self._table.itemSelectionChanged.connect(self._on_selection_changed)
+        content_layout.addWidget(self._table, stretch=2)
+
+        # 対応履歴パネル
+        self._activity_panel = QGroupBox("対応履歴")
+        self._activity_panel.setFixedWidth(380)
+        panel_layout = QVBoxLayout(self._activity_panel)
+
+        # プレースホルダー（未選択時）
+        self._placeholder_label = QLabel("名簿から会員を選択してください。")
+        self._placeholder_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        panel_layout.addWidget(self._placeholder_label)
+
+        # 対応履歴のコンテンツ（選択時に表示）
+        self._activity_content = QWidget()
+        content_vbox = QVBoxLayout(self._activity_content)
+        content_vbox.setContentsMargins(0, 0, 0, 0)
+
+        # 新規メモ入力エリア
+        input_group = QGroupBox("新規対応メモを追加")
+        input_layout = QVBoxLayout(input_group)
+
+        # カテゴリ選択
+        cat_row = QHBoxLayout()
+        cat_row.addWidget(QLabel("カテゴリ："))
+        self._cat_combo = QComboBox()
+        self._cat_combo.addItem("カテゴリなし", None)
+        for cat in self._activity_svc.get_categories():
+            self._cat_combo.addItem(cat.name, cat.id)
+        cat_row.addWidget(self._cat_combo)
+        cat_row.addStretch()
+        input_layout.addLayout(cat_row)
+
+        # テキスト入力
+        self._content_edit = QTextEdit()
+        self._content_edit.setFixedHeight(160)
+        self._content_edit.setPlaceholderText("対応内容を入力してください")
+        input_layout.addWidget(self._content_edit)
+
+        # 保存ボタン
+        save_row = QHBoxLayout()
+        save_btn = QPushButton("保存")
+        save_btn.clicked.connect(self._on_save_activity)
+        save_row.addStretch()
+        save_row.addWidget(save_btn)
+        input_layout.addLayout(save_row)
+
+        content_vbox.addWidget(input_group, stretch=1)
+
+        # 履歴表示エリア
+        log_scroll = QScrollArea()
+        log_scroll.setWidgetResizable(True)
+        self._log_container = QWidget()
+        self._log_vbox = QVBoxLayout(self._log_container)
+        self._log_vbox.setAlignment(Qt.AlignmentFlag.AlignTop)
+        log_scroll.setWidget(self._log_container)
+        content_vbox.addWidget(log_scroll, stretch=2)
+        panel_layout.addWidget(self._activity_content)
+
+        # 初期状態は非表示
+        self._activity_content.setVisible(False)
+
+        content_layout.addWidget(self._activity_panel)
+        layout.addLayout(content_layout)
 
         # ボタン行
         btn_row = QHBoxLayout()
@@ -88,13 +159,11 @@ class MemberTab(QWidget):
         withdraw_btn.clicked.connect(self._on_withdraw)
         history_btn = QPushButton("変更履歴")
         history_btn.clicked.connect(self._on_history)
-        activity_btn = QPushButton("対応履歴")
-        activity_btn.clicked.connect(self._on_activity)
         import_btn = QPushButton("Excelインポート")
         import_btn.clicked.connect(self._on_import)
         export_btn = QPushButton("Excel出力")
         export_btn.clicked.connect(self._on_export)
-        for btn in [add_btn, edit_btn, withdraw_btn, history_btn, activity_btn, import_btn, export_btn]:
+        for btn in [add_btn, edit_btn, withdraw_btn, history_btn, import_btn, export_btn]:
             btn_row.addWidget(btn)
         btn_row.addStretch()
         layout.addLayout(btn_row)
@@ -111,7 +180,6 @@ class MemberTab(QWidget):
         self._members = members
         self._table.setRowCount(len(members))
         for row, m in enumerate(members):
-            active_types = {e.ins_type for e in m.insurance_entries}
             has_tokubetsu = any(e.is_tokubetsu for e in m.insurance_entries)
             has_ikkatsu = any(e.is_ikkatsu for e in m.insurance_entries)
             self._table.setItem(row, 0, QTableWidgetItem(m.member_number))
@@ -133,9 +201,19 @@ class MemberTab(QWidget):
             self._table.setItem(row, 12, QTableWidgetItem(m.address_mail or ""))
             self._table.setItem(row, 13, QTableWidgetItem(m.addressee_mail or ""))
             self._table.setItem(row, 14, QTableWidgetItem(m.employment_ins_no or ""))
+            ins_map = {e.ins_type: e for e in m.insurance_entries}
             for col_idx, ins_type in enumerate(INS_TYPES):
-                self._table.setItem(row, 15 + col_idx,
-                    QTableWidgetItem("●" if ins_type in active_types else ""))
+                entry = ins_map.get(ins_type)
+                val = entry.ins_number if entry else ""
+                item = QTableWidgetItem(val)
+                if entry:
+                    if entry.is_tokubetsu and entry.is_ikkatsu:
+                        item.setBackground(QBrush(QColor(255, 242, 204)))  # 薄い黄色
+                    elif entry.is_tokubetsu:
+                        item.setBackground(QBrush(QColor(226, 240, 217)))  # 薄い緑
+                    elif entry.is_ikkatsu:
+                        item.setBackground(QBrush(QColor(221, 235, 247)))  # 薄い青
+                self._table.setItem(row, 15 + col_idx, item)
             self._table.setItem(row, 20, QTableWidgetItem("●" if has_tokubetsu else ""))
             self._table.setItem(row, 21, QTableWidgetItem("●" if has_ikkatsu else ""))
             self._table.setItem(row, 22, QTableWidgetItem(""))  # 最終対応日（Plan3で実装）
@@ -174,15 +252,65 @@ class MemberTab(QWidget):
             return
         MemberHistoryDialog(self._engine, m.id, parent=self).exec()
 
-    def _on_activity(self):
+    def _on_selection_changed(self):
+        m = self._selected_member()
+        if not m:
+            self._placeholder_label.setVisible(True)
+            self._activity_content.setVisible(False)
+            self._activity_panel.setTitle("対応履歴")
+            return
+        
+        self._placeholder_label.setVisible(False)
+        self._activity_content.setVisible(True)
+        self._activity_panel.setTitle(f"対応履歴 - {m.org_name}")
+        self._load_activity_logs(m.id)
+
+    def _load_activity_logs(self, member_id):
+        # 既存ウィジェットを削除
+        while self._log_vbox.count():
+            item = self._log_vbox.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+
+        logs = self._activity_svc.get_logs(member_id)
+        for log in logs:
+            cat_names = "・".join(c.name for c in log.categories) if log.categories else "カテゴリなし"
+            entry = QWidget()
+            entry.setStyleSheet("border:1px solid #ddd; border-radius:4px; padding:4px; margin:2px;")
+            entry_layout = QVBoxLayout(entry)
+            entry_layout.setContentsMargins(6, 4, 6, 4)
+            header = QLabel(
+                f"<b>{log.logged_at.strftime('%Y-%m-%d %H:%M')}</b>　{html.escape(log.logged_by)}　"
+                f"<span style='color:#666'>[{html.escape(cat_names)}]</span>"
+            )
+            content = QLabel(log.content)
+            content.setTextFormat(Qt.TextFormat.PlainText)
+            content.setWordWrap(True)
+            entry_layout.addWidget(header)
+            entry_layout.addWidget(content)
+            self._log_vbox.addWidget(entry)
+
+        if not logs:
+            self._log_vbox.addWidget(QLabel("対応履歴はありません。"))
+
+    def _on_save_activity(self):
         m = self._selected_member()
         if not m:
             return
-        from app.ui.dialogs.activity_log_dialog import ActivityLogDialog
-        ActivityLogDialog(
-            self._engine, m.id, self._config.last_staff_name, m.org_name, parent=self
-        ).exec()
-        self._refresh()  # 最終対応日更新のため
+        content = self._content_edit.toPlainText().strip()
+        if not content:
+            QMessageBox.warning(self, "入力エラー", "内容を入力してください。")
+            return
+        cat_id = self._cat_combo.currentData()
+        cat_ids = [cat_id] if cat_id is not None else []
+        try:
+            self._activity_svc.add_log(m.id, content, cat_ids, self._config.last_staff_name)
+            self._content_edit.clear()
+            self._cat_combo.setCurrentIndex(0)
+            self._load_activity_logs(m.id)
+            self._refresh()  # 最終対応日更新のため
+        except Exception as e:
+            QMessageBox.critical(self, "エラー", str(e))
 
     def _on_import(self):
         dlg = ImportDialog(self._engine, self._config.last_staff_name, parent=self)
