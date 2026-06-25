@@ -6,9 +6,14 @@ on:
     tags:
       - "v*.*.*"
 
+permissions:
+  contents: read
+
 jobs:
   build:
     runs-on: windows-latest
+    permissions:
+      contents: write  # required to publish a Release
 
     steps:
       - uses: actions/checkout@v4
@@ -23,9 +28,12 @@ jobs:
 
       - name: Get version from tag
         id: get_version
+        env:
+          REF_NAME: ${{ github.ref_name }}
         run: |
-          $version = "${{ github.ref_name }}".TrimStart("v")
-          echo "VERSION=$version" >> $env:GITHUB_OUTPUT
+          if ($env:REF_NAME -notmatch '^v\d+\.\d+\.\d+$') { throw "Bad tag: $env:REF_NAME" }
+          $version = $env:REF_NAME.TrimStart('v')
+          "VERSION=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
 
       - name: Generate icon
         run: python generate_icon.py
@@ -41,7 +49,7 @@ jobs:
           & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer\setup.iss
 
       - name: Create Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v2  # TODO: pin to commit SHA for supply-chain safety
         with:
           files: installer_output/Rouho_Setup_${{ steps.get_version.outputs.VERSION }}.exe
           generate_release_notes: true
