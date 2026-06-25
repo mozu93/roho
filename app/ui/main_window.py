@@ -76,18 +76,36 @@ class MainWindow(QMainWindow):
 
         # 新着バナー（ヘッダーとタブウィジェットの間）
         self._banner = NotificationBanner(self._engine, self._config)
+        self._banner.navigate_to_member.connect(self._on_navigate_to_member)
         root.addWidget(self._banner)
 
         # タブウィジェット
-        tabs = QTabWidget()
-        tabs.addTab(MemberTab(self._engine, self._config), "名簿")
-        tabs.addTab(WithdrawnTab(self._engine, self._config), "脱会済み")
-        tabs.addTab(LabelTab(self._engine, self._config), "ラベル出力")
-        tabs.addTab(EmailTab(self._engine, self._config), "メール送信")
-        tabs.addTab(SettingsTab(self._engine, self._config), "設定")
-        root.addWidget(tabs)
+        self._tabs = QTabWidget()
+        self._tabs.addTab(MemberTab(self._engine, self._config), "名簿")
+        self._tabs.addTab(WithdrawnTab(self._engine, self._config), "脱会済み")
+        self._tabs.addTab(LabelTab(self._engine, self._config), "ラベル出力")
+        self._tabs.addTab(EmailTab(self._engine, self._config), "メール送信")
+        self._tabs.addTab(SettingsTab(self._engine, self._config), "設定")
+        root.addWidget(self._tabs)
 
         self.statusBar().showMessage(f"v{__version__}")
+
+    def _on_navigate_to_member(self, member_id: int, event_type: str, event_id: int):
+        # 名簿タブ（インデックス0）に切り替え
+        self._tabs.setCurrentIndex(0)
+        if event_type == "activity":
+            from app.ui.dialogs.activity_log_dialog import ActivityLogDialog
+            from app.services.member_service import MemberService
+            m = MemberService(self._engine).get(member_id)
+            ActivityLogDialog(
+                self._engine, member_id,
+                self._config.last_staff_name,
+                m.org_name if m else "",
+                parent=self,
+            ).exec()
+        else:
+            from app.ui.dialogs.member_history_dialog import MemberHistoryDialog
+            MemberHistoryDialog(self._engine, member_id, parent=self).exec()
 
     def _on_logout(self):
         self._config.last_staff_name = ""

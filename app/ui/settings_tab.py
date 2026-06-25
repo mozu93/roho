@@ -73,6 +73,9 @@ class SettingsTab(QWidget):
         if not name:
             return
         with get_session(self._engine) as session:
+            if session.query(Staff).filter_by(name=name).first():
+                QMessageBox.warning(self, "エラー", f"「{name}」はすでに存在します。")
+                return
             session.add(Staff(name=name))
         self._staff_edit.clear()
         self._refresh_staff()

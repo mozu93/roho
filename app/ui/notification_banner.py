@@ -87,7 +87,6 @@ class NotificationBanner(QWidget):
             # 個別既読ボタン
             conf_btn = QPushButton("✓")
             conf_btn.setFixedSize(24, 20)
-            conf_id = item["id"]
             conf_type = item["type"]
             conf_event_id = item["event_id"]
             conf_btn.clicked.connect(
