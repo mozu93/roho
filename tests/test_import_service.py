@@ -18,10 +18,11 @@ COLUMN_MAP = {
     "tel": 9,             # J
     "postal_code": 12,    # M
     "address": 13,        # N
-    "ins_ippan_branch": 17,   # R (0-indexed from 0)
-    "ins_ippan_number": 18,   # S
-    "ins_ippan_tokubetsu": 19,
-    "ins_ippan_ikkatsu": 20,
+    "employment_ins_no": 17,  # R
+    "ins_ippan_branch": 18,   # S
+    "ins_ippan_number": 19,   # T
+    "ins_ippan_tokubetsu": 20,
+    "ins_ippan_ikkatsu": 21,
 }
 
 @pytest.fixture
@@ -41,11 +42,11 @@ def _make_excel(rows):
     return path
 
 def test_import_new_members(engine):
-    # B=会員No, C=事業所名, R=枝番0, S=番号
-    row = [""] * 35
+    # B=会員No, C=事業所名, S=枝番0, T=番号
+    row = [""] * 39
     row[1] = "9001"; row[2] = "テスト商事"
-    row[17] = "0"; row[18] = "101"
-    path = _make_excel([[""] * 35, row])  # 1行目ヘッダー
+    row[18] = "0"; row[19] = "101"
+    path = _make_excel([[""] * 39, row])  # 1行目ヘッダー
     try:
         svc = ImportService(engine)
         result = svc.import_excel(path, overwrite=False, staff_name="山田")

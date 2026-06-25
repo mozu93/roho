@@ -22,29 +22,29 @@ DEFAULT_COL_MAP = {
     "postal_code_mail": 14,  # O
     "address_mail":  15,   # P
     "addressee_mail":16,   # Q
-    # 保険番号（R=17始まり、各2列＋フラグ2列）
-    "ins_ippan_branch":           17,  # R
-    "ins_ippan_number":           18,  # S
-    "ins_ippan_tokubetsu":        19,
-    "ins_ippan_ikkatsu":          20,
-    "ins_kensetsu_koyou_branch":  21,  # T
-    "ins_kensetsu_koyou_number":  22,  # U
-    "ins_kensetsu_koyou_tokubetsu": 23,
-    "ins_kensetsu_koyou_ikkatsu": 24,
-    "ins_ringyo_branch":          25,  # V
-    "ins_ringyo_number":          26,  # W
-    "ins_ringyo_tokubetsu":       27,
-    "ins_ringyo_ikkatsu":         28,
-    "ins_kensetsu_genba_branch":  29,
-    "ins_kensetsu_genba_number":  30,  # Y
-    "ins_kensetsu_genba_tokubetsu": 31,
-    "ins_kensetsu_genba_ikkatsu": 32,
-    "ins_kensetsu_jimusho_branch": 33,  # Z
-    "ins_kensetsu_jimusho_number": 34,  # AA
-    "ins_kensetsu_jimusho_tokubetsu": 35,
-    "ins_kensetsu_jimusho_ikkatsu": 36,
-    "employment_ins_no": None,  # 要確認: 実際の入力Excelの列番号を設定すること
-    "note":              37,  # AM
+    "employment_ins_no": 17,  # R
+    # 保険番号（S=18始まり、各2列＋フラグ2列）
+    "ins_ippan_branch":           18,  # S
+    "ins_ippan_number":           19,  # T
+    "ins_ippan_tokubetsu":        20,
+    "ins_ippan_ikkatsu":          21,
+    "ins_kensetsu_koyou_branch":  22,  # W
+    "ins_kensetsu_koyou_number":  23,  # X
+    "ins_kensetsu_koyou_tokubetsu": 24,
+    "ins_kensetsu_koyou_ikkatsu": 25,
+    "ins_ringyo_branch":          26,  # AA
+    "ins_ringyo_number":          27,  # AB
+    "ins_ringyo_tokubetsu":       28,
+    "ins_ringyo_ikkatsu":         29,
+    "ins_kensetsu_genba_branch":  30,
+    "ins_kensetsu_genba_number":  31,  # AD
+    "ins_kensetsu_genba_tokubetsu": 32,
+    "ins_kensetsu_genba_ikkatsu": 33,
+    "ins_kensetsu_jimusho_branch": 34,  # AH
+    "ins_kensetsu_jimusho_number": 35,  # AI
+    "ins_kensetsu_jimusho_tokubetsu": 36,
+    "ins_kensetsu_jimusho_ikkatsu": 37,
+    "note":              38,  # AM
 }
 
 INS_TYPE_KEYS = [
