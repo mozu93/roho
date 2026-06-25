@@ -158,6 +158,31 @@ class ActivityService:
             ).all():
                 conf.confirmed_at = now
 
+    def search_logs(self, keyword: str, member_id: int = None) -> list[dict]:
+        with get_session(self._engine) as session:
+            q = (
+                session.query(ActivityLog, Member)
+                .join(Member, ActivityLog.member_id == Member.id)
+            )
+            if member_id is not None:
+                q = q.filter(ActivityLog.member_id == member_id)
+            if keyword:
+                q = q.filter(ActivityLog.content.like(f"%{keyword}%"))
+            q = q.order_by(ActivityLog.logged_at.desc())
+            results = []
+            for log, member in q.all():
+                _ = log.categories
+                results.append({
+                    "log_id": log.id,
+                    "member_id": member.id,
+                    "org_name": member.org_name,
+                    "logged_at": log.logged_at,
+                    "logged_by": log.logged_by,
+                    "categories": [c.name for c in log.categories],
+                    "content": log.content,
+                })
+            return results
+
     def get_categories(self) -> list[ActivityCategory]:
         with get_session(self._engine) as session:
             cats = session.query(ActivityCategory).order_by(

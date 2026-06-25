@@ -15,6 +15,7 @@ from app.ui.dialogs.member_edit_dialog import MemberEditDialog
 from app.ui.dialogs.member_history_dialog import MemberHistoryDialog
 from app.ui.dialogs.withdraw_dialog import WithdrawDialog
 from app.ui.dialogs.import_dialog import ImportDialog
+from app.ui.dialogs.activity_search_dialog import ActivitySearchDialog
 
 
 class SortableTableWidgetItem(QTableWidgetItem):
@@ -202,9 +203,12 @@ class MemberTab(QWidget):
         import_btn.clicked.connect(self._on_import)
         export_btn = QPushButton("Excel出力")
         export_btn.clicked.connect(self._on_export)
+        activity_search_btn = QPushButton("対応履歴検索")
+        activity_search_btn.clicked.connect(self._on_activity_search)
         for btn in [add_btn, edit_btn, withdraw_btn, history_btn, import_btn, export_btn]:
             btn_row.addWidget(btn)
         btn_row.addStretch()
+        btn_row.addWidget(activity_search_btn)
         layout.addLayout(btn_row)
 
     def _refresh(self):
@@ -415,6 +419,28 @@ class MemberTab(QWidget):
                 self._config.save(self._config_path)
             except Exception as e:
                 print(f"Failed to save config: {e}")
+
+    def _on_activity_search(self):
+        dlg = ActivitySearchDialog(self._engine, parent=self)
+        dlg.member_selected.connect(self._jump_to_member)
+        dlg.exec()
+
+    def _jump_to_member(self, member_id: int):
+        for row in range(self._table.rowCount()):
+            item = self._table.item(row, 0)
+            if item and item.data(Qt.ItemDataRole.UserRole) == member_id:
+                self._table.selectRow(row)
+                self._table.scrollToItem(item)
+                return
+        # 現在の検索条件でヒットしない場合は条件をリセットして再検索
+        self._keyword_edit.clear()
+        self._refresh()
+        for row in range(self._table.rowCount()):
+            item = self._table.item(row, 0)
+            if item and item.data(Qt.ItemDataRole.UserRole) == member_id:
+                self._table.selectRow(row)
+                self._table.scrollToItem(item)
+                return
 
     def _on_export(self):
         from PyQt6.QtWidgets import QFileDialog
