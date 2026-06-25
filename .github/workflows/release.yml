@@ -16,10 +16,10 @@ jobs:
       contents: write  # required to publish a Release
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4  # TODO: pin to commit SHA, e.g. actions/checkout@<40-char-sha>
 
       - name: Set up Python 3.11
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v5  # TODO: pin to commit SHA
         with:
           python-version: "3.11"
 
