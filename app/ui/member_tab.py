@@ -142,7 +142,14 @@ class MemberTab(QWidget):
         MemberHistoryDialog(self._engine, m.id, parent=self).exec()
 
     def _on_activity(self):
-        pass  # Plan 3 で実装
+        m = self._selected_member()
+        if not m:
+            return
+        from app.ui.dialogs.activity_log_dialog import ActivityLogDialog
+        ActivityLogDialog(
+            self._engine, m.id, self._config.last_staff_name, m.org_name, parent=self
+        ).exec()
+        self._refresh()  # 最終対応日更新のため
 
     def _on_export(self):
         from PyQt6.QtWidgets import QFileDialog
