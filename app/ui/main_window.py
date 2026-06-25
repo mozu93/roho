@@ -13,6 +13,7 @@ from app.ui.label_tab import LabelTab
 from app.ui.email_tab import EmailTab
 from app.ui.settings_tab import SettingsTab
 from app.ui.notification_banner import NotificationBanner
+from app.ui.update_banner import UpdateBanner
 from app.version import __version__
 
 
@@ -78,6 +79,11 @@ class MainWindow(QMainWindow):
         self._banner = NotificationBanner(self._engine, self._config)
         self._banner.navigate_to_member.connect(self._on_navigate_to_member)
         root.addWidget(self._banner)
+
+        # アップデートバナー
+        GITHUB_REPO = "mozu93/rouho"
+        self._update_banner = UpdateBanner(GITHUB_REPO, __version__)
+        root.addWidget(self._update_banner)
 
         # タブウィジェット
         self._tabs = QTabWidget()
