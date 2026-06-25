@@ -1,7 +1,7 @@
 # app/ui/dialogs/member_edit_dialog.py
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QFormLayout,
-    QLineEdit, QTextEdit, QCheckBox, QGroupBox,
+    QLineEdit, QTextEdit, QCheckBox, QGroupBox, QComboBox,
     QPushButton, QScrollArea, QWidget, QLabel, QMessageBox,
 )
 from app.services.member_service import MemberService, INS_TYPES
@@ -27,7 +27,7 @@ class MemberEditDialog(QDialog):
         self._member_id = member_id
         self._svc = MemberService(engine)
         self.saved = False
-        self.setWindowTitle("加入者編集" if member_id else "加入者追加")
+        self.setWindowTitle("編集" if member_id else "新規登録")
         self.setMinimumWidth(620)
         self.resize(640, 580)
         self._build_ui()
@@ -44,6 +44,9 @@ class MemberEditDialog(QDialog):
         # 基本情報
         basic = QGroupBox("基本情報")
         fl = QFormLayout(basic)
+        self._f_is_member = QComboBox()
+        self._f_is_member.addItem("会員", True)
+        self._f_is_member.addItem("非会員", False)
         self._f_member_number = QLineEdit()
         self._f_org_name = QLineEdit()
         self._f_org_kana = QLineEdit()
@@ -70,7 +73,8 @@ class MemberEditDialog(QDialog):
         fax_row.addWidget(self._f_fax_area)
         fax_row.addWidget(QLabel("-"))
         fax_row.addWidget(self._f_fax)
-        fl.addRow("会員No.*", self._f_member_number)
+        fl.addRow("種別*", self._f_is_member)
+        fl.addRow("会員No.", self._f_member_number)
         fl.addRow("事業所名*", self._f_org_name)
         fl.addRow("フリガナ", self._f_org_kana)
         fl.addRow("所属・役職", self._f_dept_title)
@@ -142,6 +146,8 @@ class MemberEditDialog(QDialog):
         m = self._svc.get(member_id)
         if not m:
             return
+        idx = 0 if getattr(m, "is_member", True) else 1
+        self._f_is_member.setCurrentIndex(idx)
         self._f_member_number.setText(m.member_number or "")
         self._f_org_name.setText(m.org_name or "")
         self._f_org_kana.setText(m.org_kana or "")
@@ -180,7 +186,8 @@ class MemberEditDialog(QDialog):
                     "is_ikkatsu": ika_chk.isChecked(),
                 })
         return {
-            "member_number": self._f_member_number.text().strip(),
+            "is_member": self._f_is_member.currentData(),
+            "member_number": self._f_member_number.text().strip() or None,
             "org_name": self._f_org_name.text().strip(),
             "org_kana": self._f_org_kana.text().strip(),
             "dept_title": self._f_dept_title.text().strip(),
@@ -203,8 +210,8 @@ class MemberEditDialog(QDialog):
 
     def _on_save(self):
         data = self._collect_data()
-        if not data["member_number"]:
-            QMessageBox.warning(self, "入力エラー", "会員No.は必須です。")
+        if data["is_member"] and not data["member_number"]:
+            QMessageBox.warning(self, "入力エラー", "会員の場合、会員No.は必須です。")
             return
         if not data["org_name"]:
             QMessageBox.warning(self, "入力エラー", "事業所名は必須です。")

@@ -51,11 +51,16 @@ class SortableTableWidgetItem(QTableWidgetItem):
 BRANCH_LABELS = {"ippan": "0", "kensetsu_koyou": "2", "ringyo": "4",
                  "kensetsu_genba": "5", "kensetsu_jimusho": "6"}
 COLS = [
-    "会員No.", "事業所名", "フリガナ", "所属・役職", "代表者名", "代表者フリガナ",
-    "メール", "電話番号", "FAX番号", "郵便番号", "住所", "郵送先郵便番号",
-    "郵送先住所", "郵送先宛名", "雇用保険事業所番号",
+    "事業所コード", "会員No.", "種別", "事業所名", "フリガナ", "所属・役職",
+    "代表者名", "代表者フリガナ", "メール", "電話番号", "FAX番号", "郵便番号", "住所",
+    "郵送先郵便番号", "郵送先住所", "郵送先宛名", "雇用保険事業所番号",
     "0", "2", "4", "5", "6", "特別", "一括", "最終対応日", "メモ"
 ]
+# 列インデックス定数
+_COL_COMPANY_CODE = 0
+_COL_MEMBER_NUMBER = 1
+_COL_IS_MEMBER = 2
+_COL_ORG_NAME = 3
 
 
 class MemberTab(QWidget):
@@ -113,7 +118,7 @@ class MemberTab(QWidget):
         self._table.setHorizontalHeaderLabels(COLS)
         self._table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self._table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
-        self._table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+        self._table.horizontalHeader().setSectionResizeMode(_COL_ORG_NAME, QHeaderView.ResizeMode.Stretch)
         self._table.horizontalHeader().setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self._table.horizontalHeader().customContextMenuRequested.connect(self._show_column_menu)
         self._table.itemDoubleClicked.connect(self._on_edit)
@@ -227,28 +232,30 @@ class MemberTab(QWidget):
             has_tokubetsu = any(e.is_tokubetsu for e in m.insurance_entries)
             has_ikkatsu = any(e.is_ikkatsu for e in m.insurance_entries)
             
-            no_item = SortableTableWidgetItem(m.member_number)
-            no_item.setData(Qt.ItemDataRole.UserRole, m.id)
-            self._table.setItem(row, 0, no_item)
-            
-            self._table.setItem(row, 1, SortableTableWidgetItem(m.org_name))
-            self._table.setItem(row, 2, SortableTableWidgetItem(m.org_kana or ""))
-            self._table.setItem(row, 3, SortableTableWidgetItem(m.dept_title or ""))
-            self._table.setItem(row, 4, SortableTableWidgetItem(m.rep_name or ""))
-            self._table.setItem(row, 5, SortableTableWidgetItem(m.rep_kana or ""))
-            self._table.setItem(row, 6, SortableTableWidgetItem(m.email or ""))
-            self._table.setItem(row, 7, SortableTableWidgetItem(
+            code_item = SortableTableWidgetItem(str(m.company_code) if m.company_code else "")
+            code_item.setData(Qt.ItemDataRole.UserRole, m.id)
+            self._table.setItem(row, _COL_COMPANY_CODE, code_item)
+            self._table.setItem(row, _COL_MEMBER_NUMBER, SortableTableWidgetItem(m.member_number or ""))
+            is_mem = getattr(m, "is_member", True)
+            self._table.setItem(row, _COL_IS_MEMBER, SortableTableWidgetItem("会員" if is_mem else "非会員"))
+            self._table.setItem(row, _COL_ORG_NAME, SortableTableWidgetItem(m.org_name))
+            self._table.setItem(row, 4, SortableTableWidgetItem(m.org_kana or ""))
+            self._table.setItem(row, 5, SortableTableWidgetItem(m.dept_title or ""))
+            self._table.setItem(row, 6, SortableTableWidgetItem(m.rep_name or ""))
+            self._table.setItem(row, 7, SortableTableWidgetItem(m.rep_kana or ""))
+            self._table.setItem(row, 8, SortableTableWidgetItem(m.email or ""))
+            self._table.setItem(row, 9, SortableTableWidgetItem(
                 f"{m.tel_area or ''}-{m.tel or ''}" if m.tel else ""
             ))
-            self._table.setItem(row, 8, SortableTableWidgetItem(
+            self._table.setItem(row, 10, SortableTableWidgetItem(
                 f"{m.fax_area or ''}-{m.fax or ''}" if m.fax else ""
             ))
-            self._table.setItem(row, 9, SortableTableWidgetItem(m.postal_code or ""))
-            self._table.setItem(row, 10, SortableTableWidgetItem(m.address or ""))
-            self._table.setItem(row, 11, SortableTableWidgetItem(m.postal_code_mail or ""))
-            self._table.setItem(row, 12, SortableTableWidgetItem(m.address_mail or ""))
-            self._table.setItem(row, 13, SortableTableWidgetItem(m.addressee_mail or ""))
-            self._table.setItem(row, 14, SortableTableWidgetItem(m.employment_ins_no or ""))
+            self._table.setItem(row, 11, SortableTableWidgetItem(m.postal_code or ""))
+            self._table.setItem(row, 12, SortableTableWidgetItem(m.address or ""))
+            self._table.setItem(row, 13, SortableTableWidgetItem(m.postal_code_mail or ""))
+            self._table.setItem(row, 14, SortableTableWidgetItem(m.address_mail or ""))
+            self._table.setItem(row, 15, SortableTableWidgetItem(m.addressee_mail or ""))
+            self._table.setItem(row, 16, SortableTableWidgetItem(m.employment_ins_no or ""))
             ins_map = {e.ins_type: e for e in m.insurance_entries}
             for col_idx, ins_type in enumerate(INS_TYPES):
                 entry = ins_map.get(ins_type)
@@ -261,18 +268,18 @@ class MemberTab(QWidget):
                         item.setBackground(QBrush(QColor(226, 240, 217)))  # 薄い緑
                     elif entry.is_ikkatsu:
                         item.setBackground(QBrush(QColor(255, 224, 178)))  # 薄いオレンジ
-                self._table.setItem(row, 15 + col_idx, item)
-            self._table.setItem(row, 20, SortableTableWidgetItem("●" if has_tokubetsu else ""))
-            self._table.setItem(row, 21, SortableTableWidgetItem("●" if has_ikkatsu else ""))
-            self._table.setItem(row, 22, SortableTableWidgetItem(""))  # 最終対応日（Plan3で実装）
-            self._table.setItem(row, 23, SortableTableWidgetItem(m.note or ""))
+                self._table.setItem(row, 17 + col_idx, item)
+            self._table.setItem(row, 22, SortableTableWidgetItem("●" if has_tokubetsu else ""))
+            self._table.setItem(row, 23, SortableTableWidgetItem("●" if has_ikkatsu else ""))
+            self._table.setItem(row, 24, SortableTableWidgetItem(""))  # 最終対応日
+            self._table.setItem(row, 25, SortableTableWidgetItem(m.note or ""))
         self._table.setSortingEnabled(True)
 
     def _selected_member(self):
         row = self._table.currentRow()
         if row < 0:
             return None
-        item = self._table.item(row, 0)
+        item = self._table.item(row, _COL_COMPANY_CODE)
         if not item:
             return None
         member_id = item.data(Qt.ItemDataRole.UserRole)

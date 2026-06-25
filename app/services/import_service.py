@@ -5,46 +5,48 @@ from app.database.models import Member, InsuranceEntry
 from app.services.member_service import MemberService
 
 # Excel列インデックス（0始まり）→フィールドマッピング
+# A(0)=事業所コード（自動採番のためインポート時は無視）
 DEFAULT_COL_MAP = {
     "member_number":  1,   # B
-    "org_name":       2,   # C
-    "org_kana":       3,   # D
-    "dept_title":     4,   # E
-    "rep_name":       5,   # F
-    "rep_kana":       6,   # G
-    "email":          7,   # H
-    "tel_area":       8,   # I
-    "tel":            9,   # J
-    "fax_area":      10,   # K
-    "fax":           11,   # L
-    "postal_code":   12,   # M
-    "address":       13,   # N
-    "postal_code_mail": 14,  # O
-    "address_mail":  15,   # P
-    "addressee_mail":16,   # Q
-    "employment_ins_no": 17,  # R
-    # 保険番号（S=18始まり、各2列＋フラグ2列）
-    "ins_ippan_branch":           18,  # S
-    "ins_ippan_number":           19,  # T
-    "ins_ippan_tokubetsu":        20,
-    "ins_ippan_ikkatsu":          21,
-    "ins_kensetsu_koyou_branch":  22,  # W
-    "ins_kensetsu_koyou_number":  23,  # X
-    "ins_kensetsu_koyou_tokubetsu": 24,
-    "ins_kensetsu_koyou_ikkatsu": 25,
-    "ins_ringyo_branch":          26,  # AA
-    "ins_ringyo_number":          27,  # AB
-    "ins_ringyo_tokubetsu":       28,
-    "ins_ringyo_ikkatsu":         29,
-    "ins_kensetsu_genba_branch":  30,
-    "ins_kensetsu_genba_number":  31,  # AD
-    "ins_kensetsu_genba_tokubetsu": 32,
-    "ins_kensetsu_genba_ikkatsu": 33,
-    "ins_kensetsu_jimusho_branch": 34,  # AH
-    "ins_kensetsu_jimusho_number": 35,  # AI
-    "ins_kensetsu_jimusho_tokubetsu": 36,
-    "ins_kensetsu_jimusho_ikkatsu": 37,
-    "note":              38,  # AM
+    "is_member":      2,   # C  1or"会員"=会員、0or"非会員"=非会員
+    "org_name":       3,   # D
+    "org_kana":       4,   # E
+    "dept_title":     5,   # F
+    "rep_name":       6,   # G
+    "rep_kana":       7,   # H
+    "email":          8,   # I
+    "tel_area":       9,   # J
+    "tel":           10,   # K
+    "fax_area":      11,   # L
+    "fax":           12,   # M
+    "postal_code":   13,   # N
+    "address":       14,   # O
+    "postal_code_mail": 15,  # P
+    "address_mail":  16,   # Q
+    "addressee_mail": 17,  # R
+    "employment_ins_no": 18,  # S
+    # 保険番号（T=19始まり、各2列＋フラグ2列）
+    "ins_ippan_branch":           19,
+    "ins_ippan_number":           20,
+    "ins_ippan_tokubetsu":        21,
+    "ins_ippan_ikkatsu":          22,
+    "ins_kensetsu_koyou_branch":  23,
+    "ins_kensetsu_koyou_number":  24,
+    "ins_kensetsu_koyou_tokubetsu": 25,
+    "ins_kensetsu_koyou_ikkatsu": 26,
+    "ins_ringyo_branch":          27,
+    "ins_ringyo_number":          28,
+    "ins_ringyo_tokubetsu":       29,
+    "ins_ringyo_ikkatsu":         30,
+    "ins_kensetsu_genba_branch":  31,
+    "ins_kensetsu_genba_number":  32,
+    "ins_kensetsu_genba_tokubetsu": 33,
+    "ins_kensetsu_genba_ikkatsu": 34,
+    "ins_kensetsu_jimusho_branch": 35,
+    "ins_kensetsu_jimusho_number": 36,
+    "ins_kensetsu_jimusho_tokubetsu": 37,
+    "ins_kensetsu_jimusho_ikkatsu": 38,
+    "note":              39,
 }
 
 INS_TYPE_KEYS = [
@@ -78,9 +80,9 @@ class ImportService:
         result = {"added": 0, "updated": 0, "skipped": 0}
 
         for row in ws.iter_rows(min_row=2, values_only=True):
-            member_number = str(row[col_map["member_number"]] or "").strip()
+            member_number = str(row[col_map["member_number"]] or "").strip() or None
             org_name = str(row[col_map["org_name"]] or "").strip()
-            if not member_number or not org_name:
+            if not org_name:
                 result["skipped"] += 1
                 continue
 
@@ -103,8 +105,15 @@ class ImportService:
                         "is_ikkatsu": bool(_get(f"{prefix}_ikkatsu")),
                     })
 
+            raw_is_member = _get("is_member")
+            if isinstance(raw_is_member, str):
+                is_member = raw_is_member.strip() not in ("0", "非会員", "false", "False")
+            else:
+                is_member = bool(raw_is_member) if raw_is_member is not None else True
+
             data = {
                 "member_number": member_number,
+                "is_member": is_member,
                 "org_name": org_name,
                 "org_kana": str(_get("org_kana") or ""),
                 "dept_title": str(_get("dept_title") or ""),
@@ -125,11 +134,16 @@ class ImportService:
                 "insurance_entries": ins_entries,
             }
 
-            # 既存チェック
+            # 既存チェック（会員Noがあればそれで、なければ事業所名で照合）
             with get_session(self._engine) as session:
-                existing = session.query(Member).filter_by(
-                    member_number=member_number
-                ).first()
+                if member_number:
+                    existing = session.query(Member).filter_by(
+                        member_number=member_number
+                    ).first()
+                else:
+                    existing = session.query(Member).filter_by(
+                        org_name=org_name
+                    ).first()
                 exists = existing is not None
                 if exists:
                     member_id = existing.id
@@ -158,8 +172,8 @@ class ExportService:
         ws = wb.active
         ws.title = "加入者名簿"
         headers = [
-            "会員No.", "事業所名", "フリガナ", "所属・役職", "代表者名", "代表者フリガナ",
-            "メール", "市外局番", "電話番号", "FAX市外局番", "FAX",
+            "事業所コード", "会員No.", "会員/非会員", "事業所名", "フリガナ", "所属・役職",
+            "代表者名", "代表者フリガナ", "メール", "市外局番", "電話番号", "FAX市外局番", "FAX",
             "郵便番号", "住所", "郵送先郵便番号", "郵送先住所", "郵送先宛名",
             "雇用保険事業所番号",
             "一般枝番", "一般番号", "一般特別加入", "一般一括",
@@ -183,7 +197,9 @@ class ExportService:
                     1 if (e and e.is_ikkatsu) else "",
                 ]
             ws.append([
-                m.member_number, m.org_name, m.org_kana or "", m.dept_title or "",
+                m.company_code or "", m.member_number or "",
+                "会員" if getattr(m, "is_member", True) else "非会員",
+                m.org_name, m.org_kana or "", m.dept_title or "",
                 m.rep_name or "", m.rep_kana or "", m.email or "",
                 m.tel_area or "", m.tel or "", m.fax_area or "", m.fax or "",
                 m.postal_code or "", m.address or "",

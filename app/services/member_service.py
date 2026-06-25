@@ -1,5 +1,6 @@
 import json
 from datetime import datetime
+from sqlalchemy import func
 from app.database.connection import get_session
 from app.database.models import (
     Member, InsuranceEntry, MemberChange, ChangeConfirmation, Staff,
@@ -65,6 +66,9 @@ class MemberService:
         data = dict(data)  # コピーして元データを保護
         with get_session(self._engine) as session:
             entries_data = data.pop("insurance_entries", [])
+            # 事業所コードを自動採番
+            max_code = session.query(func.max(Member.company_code)).scalar() or 0
+            data["company_code"] = max_code + 1
             m = Member(**{k: v for k, v in data.items()})
             m.created_at = datetime.now()
             m.updated_at = datetime.now()
@@ -146,7 +150,9 @@ class MemberService:
     def member_to_dict(self, member: Member) -> dict:
         return {
             "id": member.id,
+            "company_code": member.company_code,
             "member_number": member.member_number,
+            "is_member": member.is_member,
             "org_name": member.org_name,
             "org_kana": member.org_kana,
             "rep_name": member.rep_name,

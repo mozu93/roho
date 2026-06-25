@@ -22,7 +22,9 @@ activity_log_categories = ActivityLogCategory
 class Member(Base):
     __tablename__ = "members"
     id = Column(Integer, primary_key=True)
-    member_number = Column(String, unique=True, nullable=False)
+    company_code = Column(Integer, unique=True, nullable=True)  # 事業所コード（自動採番）
+    member_number = Column(String, unique=True, nullable=True)   # 会員のみ必須
+    is_member = Column(Boolean, nullable=False, default=True)    # 会員/非会員
     org_name = Column(String, nullable=False)
     org_kana = Column(String)
     dept_title = Column(String)
