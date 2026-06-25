@@ -15,6 +15,37 @@ from app.ui.dialogs.member_history_dialog import MemberHistoryDialog
 from app.ui.dialogs.withdraw_dialog import WithdrawDialog
 from app.ui.dialogs.import_dialog import ImportDialog
 
+
+class SortableTableWidgetItem(QTableWidgetItem):
+    def __lt__(self, other):
+        if not isinstance(other, QTableWidgetItem):
+            return super().__lt__(other)
+
+        self_text = self.text()
+        other_text = other.text()
+
+        if not self_text and not other_text:
+            return False
+
+        table = self.tableWidget()
+        is_ascending = True
+        if table:
+            header = table.horizontalHeader()
+            is_ascending = (header.sortIndicatorOrder() == Qt.SortOrder.AscendingOrder)
+
+        if not self_text:
+            return not is_ascending
+        if not other_text:
+            return is_ascending
+
+        try:
+            return float(self_text) < float(other_text)
+        except ValueError:
+            pass
+
+        return self_text < other_text
+
+
 BRANCH_LABELS = {"ippan": "0", "kensetsu_koyou": "2", "ringyo": "4",
                  "kensetsu_genba": "5", "kensetsu_jimusho": "6"}
 COLS = [
@@ -85,6 +116,7 @@ class MemberTab(QWidget):
         self._table.horizontalHeader().customContextMenuRequested.connect(self._show_column_menu)
         self._table.itemDoubleClicked.connect(self._on_edit)
         self._table.itemSelectionChanged.connect(self._on_selection_changed)
+        self._table.setSortingEnabled(True)
         content_layout.addWidget(self._table, stretch=2)
 
         # 対応履歴パネル
@@ -169,6 +201,7 @@ class MemberTab(QWidget):
         layout.addLayout(btn_row)
 
     def _refresh(self):
+        self._table.setSortingEnabled(False)
         ins_types = [t for t, chk in self._ins_checks.items() if chk.isChecked()]
         members = self._svc.search(
             keyword=self._keyword_edit.text(),
@@ -182,30 +215,34 @@ class MemberTab(QWidget):
         for row, m in enumerate(members):
             has_tokubetsu = any(e.is_tokubetsu for e in m.insurance_entries)
             has_ikkatsu = any(e.is_ikkatsu for e in m.insurance_entries)
-            self._table.setItem(row, 0, QTableWidgetItem(m.member_number))
-            self._table.setItem(row, 1, QTableWidgetItem(m.org_name))
-            self._table.setItem(row, 2, QTableWidgetItem(m.org_kana or ""))
-            self._table.setItem(row, 3, QTableWidgetItem(m.dept_title or ""))
-            self._table.setItem(row, 4, QTableWidgetItem(m.rep_name or ""))
-            self._table.setItem(row, 5, QTableWidgetItem(m.rep_kana or ""))
-            self._table.setItem(row, 6, QTableWidgetItem(m.email or ""))
-            self._table.setItem(row, 7, QTableWidgetItem(
+            
+            no_item = SortableTableWidgetItem(m.member_number)
+            no_item.setData(Qt.ItemDataRole.UserRole, m.id)
+            self._table.setItem(row, 0, no_item)
+            
+            self._table.setItem(row, 1, SortableTableWidgetItem(m.org_name))
+            self._table.setItem(row, 2, SortableTableWidgetItem(m.org_kana or ""))
+            self._table.setItem(row, 3, SortableTableWidgetItem(m.dept_title or ""))
+            self._table.setItem(row, 4, SortableTableWidgetItem(m.rep_name or ""))
+            self._table.setItem(row, 5, SortableTableWidgetItem(m.rep_kana or ""))
+            self._table.setItem(row, 6, SortableTableWidgetItem(m.email or ""))
+            self._table.setItem(row, 7, SortableTableWidgetItem(
                 f"{m.tel_area or ''}-{m.tel or ''}" if m.tel else ""
             ))
-            self._table.setItem(row, 8, QTableWidgetItem(
+            self._table.setItem(row, 8, SortableTableWidgetItem(
                 f"{m.fax_area or ''}-{m.fax or ''}" if m.fax else ""
             ))
-            self._table.setItem(row, 9, QTableWidgetItem(m.postal_code or ""))
-            self._table.setItem(row, 10, QTableWidgetItem(m.address or ""))
-            self._table.setItem(row, 11, QTableWidgetItem(m.postal_code_mail or ""))
-            self._table.setItem(row, 12, QTableWidgetItem(m.address_mail or ""))
-            self._table.setItem(row, 13, QTableWidgetItem(m.addressee_mail or ""))
-            self._table.setItem(row, 14, QTableWidgetItem(m.employment_ins_no or ""))
+            self._table.setItem(row, 9, SortableTableWidgetItem(m.postal_code or ""))
+            self._table.setItem(row, 10, SortableTableWidgetItem(m.address or ""))
+            self._table.setItem(row, 11, SortableTableWidgetItem(m.postal_code_mail or ""))
+            self._table.setItem(row, 12, SortableTableWidgetItem(m.address_mail or ""))
+            self._table.setItem(row, 13, SortableTableWidgetItem(m.addressee_mail or ""))
+            self._table.setItem(row, 14, SortableTableWidgetItem(m.employment_ins_no or ""))
             ins_map = {e.ins_type: e for e in m.insurance_entries}
             for col_idx, ins_type in enumerate(INS_TYPES):
                 entry = ins_map.get(ins_type)
                 val = entry.ins_number if entry else ""
-                item = QTableWidgetItem(val)
+                item = SortableTableWidgetItem(val)
                 if entry:
                     if entry.is_tokubetsu and entry.is_ikkatsu:
                         item.setBackground(QBrush(QColor(255, 242, 204)))  # 薄い黄色
@@ -214,16 +251,24 @@ class MemberTab(QWidget):
                     elif entry.is_ikkatsu:
                         item.setBackground(QBrush(QColor(221, 235, 247)))  # 薄い青
                 self._table.setItem(row, 15 + col_idx, item)
-            self._table.setItem(row, 20, QTableWidgetItem("●" if has_tokubetsu else ""))
-            self._table.setItem(row, 21, QTableWidgetItem("●" if has_ikkatsu else ""))
-            self._table.setItem(row, 22, QTableWidgetItem(""))  # 最終対応日（Plan3で実装）
-            self._table.setItem(row, 23, QTableWidgetItem(m.note or ""))
+            self._table.setItem(row, 20, SortableTableWidgetItem("●" if has_tokubetsu else ""))
+            self._table.setItem(row, 21, SortableTableWidgetItem("●" if has_ikkatsu else ""))
+            self._table.setItem(row, 22, SortableTableWidgetItem(""))  # 最終対応日（Plan3で実装）
+            self._table.setItem(row, 23, SortableTableWidgetItem(m.note or ""))
+        self._table.setSortingEnabled(True)
 
     def _selected_member(self):
         row = self._table.currentRow()
-        if row < 0 or row >= len(self._members):
+        if row < 0:
             return None
-        return self._members[row]
+        item = self._table.item(row, 0)
+        if not item:
+            return None
+        member_id = item.data(Qt.ItemDataRole.UserRole)
+        for m in self._members:
+            if m.id == member_id:
+                return m
+        return None
 
     def _on_add(self):
         dlg = MemberEditDialog(self._engine, self._config.last_staff_name, parent=self)
