@@ -9,10 +9,11 @@ from app.services.activity_service import ActivityService
 
 
 class SettingsTab(QWidget):
-    def __init__(self, engine, config, parent=None):
+    def __init__(self, engine, config, config_path: str = "", parent=None):
         super().__init__(parent)
         self._engine = engine
         self._config = config
+        self._config_path = config_path
         self._svc = ActivityService(engine)
         self._build_ui()
         self._refresh_staff()
@@ -137,6 +138,8 @@ class SettingsTab(QWidget):
         self._config.m365_tenant_id = self._tenant_edit.text().strip()
         self._config.m365_client_id = self._client_id_edit.text().strip()
         self._config.m365_test_address = self._test_addr_edit.text().strip()
-        config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "app_config.json")
-        self._config.save(os.path.normpath(config_path))
+        save_path = self._config_path or os.path.join(
+            os.path.dirname(os.path.abspath(__file__)), "..", "..", "app_config.json"
+        )
+        self._config.save(os.path.normpath(save_path))
         QMessageBox.information(self, "保存", "Microsoft 365設定を保存しました。")

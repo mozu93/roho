@@ -85,7 +85,7 @@ class MainWindow(QMainWindow):
         self._tabs.addTab(WithdrawnTab(self._engine, self._config), "脱会済み")
         self._tabs.addTab(LabelTab(self._engine, self._config), "ラベル出力")
         self._tabs.addTab(EmailTab(self._engine, self._config), "メール送信")
-        self._tabs.addTab(SettingsTab(self._engine, self._config), "設定")
+        self._tabs.addTab(SettingsTab(self._engine, self._config, self._config_path), "設定")
         root.addWidget(self._tabs)
 
         self.statusBar().showMessage(f"v{__version__}")
