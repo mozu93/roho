@@ -19,10 +19,10 @@ class WithdrawnTab(QWidget):
     def _build_ui(self):
         layout = QVBoxLayout(self)
         self._table = QTableWidget(0, 4)
-        self._table.setHorizontalHeaderLabels(["脱会日", "会員No.", "事業所名", "脱会理由"])
+        self._table.setHorizontalHeaderLabels(["委託解除日", "会員No.", "事業所名", "委託解除理由"])
         self._table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self._table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
-        self._table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
+        self._table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
         self._table.setAlternatingRowColors(True)
         tbl_font = QFont(QApplication.instance().font())
         tbl_font.setPointSize(tbl_font.pointSize() + 2)

@@ -87,14 +87,24 @@ class MainWindow(QMainWindow):
 
         # タブウィジェット
         self._tabs = QTabWidget()
-        self._tabs.addTab(MemberTab(self._engine, self._config, self._config_path), "名簿")
-        self._tabs.addTab(WithdrawnTab(self._engine, self._config), "脱会済み")
+        self._member_tab = MemberTab(self._engine, self._config, self._config_path)
+        self._tabs.addTab(self._member_tab, "名簿")
+        self._withdrawn_tab = WithdrawnTab(self._engine, self._config)
+        self._tabs.addTab(self._withdrawn_tab, "委託解除済")
         self._tabs.addTab(LabelTab(self._engine, self._config), "ラベル出力")
         self._tabs.addTab(EmailTab(self._engine, self._config), "メール送信")
         self._tabs.addTab(SettingsTab(self._engine, self._config, self._config_path), "設定")
+        self._tabs.currentChanged.connect(self._on_tab_changed)
         root.addWidget(self._tabs)
 
         self.statusBar().showMessage(f"v{__version__}")
+
+    def _on_tab_changed(self, index: int):
+        widget = self._tabs.widget(index)
+        if widget is self._withdrawn_tab:
+            self._withdrawn_tab._refresh()
+        elif widget is self._member_tab:
+            self._member_tab.refresh_categories()
 
     def _on_navigate_to_member(self, member_id: int, event_type: str, event_id: int):
         # 名簿タブ（インデックス0）に切り替え

@@ -51,7 +51,7 @@ class LabelTab(QWidget):
         self._tokubetsu_chk = QCheckBox("特別加入のみ")
         self._tokubetsu_chk.stateChanged.connect(self._on_filter_changed)
         flag_row.addWidget(self._tokubetsu_chk)
-        self._withdrawn_chk = QCheckBox("脱会済みを含む")
+        self._withdrawn_chk = QCheckBox("委託解除済を含む")
         self._withdrawn_chk.stateChanged.connect(self._on_filter_changed)
         flag_row.addWidget(self._withdrawn_chk)
         flag_row.addStretch()
@@ -74,8 +74,7 @@ class LabelTab(QWidget):
         # 一覧テーブル
         self._table = QTableWidget(0, 5)
         self._table.setHorizontalHeaderLabels(["選択", "会員No.", "事業所名", "住所（郵送先優先）", "特別"])
-        self._table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
-        self._table.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeMode.Stretch)
+        self._table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
         self._table.setColumnWidth(0, 40)
         layout.addWidget(self._table)
 

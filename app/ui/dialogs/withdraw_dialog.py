@@ -16,24 +16,24 @@ class WithdrawDialog(QDialog):
         self._member_id = member_id
         self._svc = MemberService(engine)
         self.withdrawn = False
-        self.setWindowTitle("脱会処理")
+        self.setWindowTitle("委託解除")
         self.setFixedSize(400, 200)
         self._build_ui()
 
     def _build_ui(self):
         layout = QVBoxLayout(self)
-        grp = QGroupBox("脱会情報を入力")
+        grp = QGroupBox("委託解除情報を入力")
         fl = QFormLayout(grp)
         self._date_edit = QDateEdit(QDate.currentDate())
         self._date_edit.setCalendarPopup(True)
         self._reason_edit = QLineEdit()
-        self._reason_edit.setPlaceholderText("脱会理由を入力してください")
-        fl.addRow("脱会日：", self._date_edit)
-        fl.addRow("脱会理由：", self._reason_edit)
+        self._reason_edit.setPlaceholderText("委託解除理由を入力してください")
+        fl.addRow("委託解除日：", self._date_edit)
+        fl.addRow("委託解除理由：", self._reason_edit)
         layout.addWidget(grp)
 
         btn_row = QHBoxLayout()
-        ok_btn = QPushButton("脱会処理を実行")
+        ok_btn = QPushButton("委託解除を実行")
         ok_btn.setDefault(True)
         ok_btn.clicked.connect(self._on_ok)
         cancel_btn = QPushButton("キャンセル")
@@ -46,12 +46,12 @@ class WithdrawDialog(QDialog):
     def _on_ok(self):
         reason = self._reason_edit.text().strip()
         if not reason:
-            QMessageBox.warning(self, "入力エラー", "脱会理由を入力してください。")
+            QMessageBox.warning(self, "入力エラー", "委託解除理由を入力してください。")
             return
         qd = self._date_edit.date()
         withdrawn_at = date(qd.year(), qd.month(), qd.day())
         reply = QMessageBox.question(
-            self, "確認", "脱会処理を実行してよいですか？",
+            self, "確認", "委託解除を実行してよいですか？",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
         )
         if reply != QMessageBox.StandardButton.Yes:

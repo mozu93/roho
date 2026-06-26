@@ -88,7 +88,7 @@ class EmailTab(QWidget):
 
         self._member_table = QTableWidget(0, 4)
         self._member_table.setHorizontalHeaderLabels(["選択", "会員No.", "事業所名", "メール"])
-        self._member_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
+        self._member_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
         self._member_table.setMaximumHeight(180)
         s1_layout.addWidget(self._member_table)
         self._selected_count_label = QLabel("選択中 0件（メール無し 0件はスキップ）")
@@ -163,7 +163,7 @@ class EmailTab(QWidget):
         self._history_table.setHorizontalHeaderLabels(
             ["送信日", "操作者", "ジョブ名", "成功", "エラー"]
         )
-        self._history_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
+        self._history_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
         self._history_table.setMaximumHeight(150)
         h_layout.addWidget(self._history_table)
         splitter.addWidget(history_widget)

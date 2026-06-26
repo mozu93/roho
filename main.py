@@ -60,6 +60,13 @@ QTableWidget {
     alternate-background-color: #f0f5fb;
     gridline-color: #d1d9e0;
 }
+QTableWidget::item:hover {
+    background: #ffe4ec;
+}
+QTableWidget::item:selected {
+    background: #ffb6c8;
+    color: #2d3748;
+}
 QTableWidget QHeaderView::section {
     background: #3d5a80;
     color: white;

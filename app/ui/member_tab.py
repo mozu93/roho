@@ -54,7 +54,7 @@ COLS = [
     "管理No.", "会", "会員No.", "事業所名", "フリガナ", "所属・役職",
     "代表者名", "代表者フリガナ", "メール", "電話番号", "FAX番号", "郵便番号", "住所",
     "郵送先郵便番号", "郵送先住所", "郵送先宛名", "雇用保険事業所番号",
-    "0", "2", "4", "5", "6", "特別", "一括", "最終対応日", "メモ"
+    "0", "2", "4", "5", "6", "特別", "継続一括", "最終対応日", "メモ"
 ]
 # 列インデックス定数
 _COL_COMPANY_CODE = 0
@@ -104,7 +104,7 @@ class MemberTab(QWidget):
         self._tokubetsu_chk = QCheckBox("特別加入のみ")
         self._tokubetsu_chk.stateChanged.connect(self._refresh)
         filter_row.addWidget(self._tokubetsu_chk)
-        self._ikkatsu_chk = QCheckBox("一括認可のみ")
+        self._ikkatsu_chk = QCheckBox("継続一括認可のみ")
         self._ikkatsu_chk.stateChanged.connect(self._refresh)
         filter_row.addWidget(self._ikkatsu_chk)
         filter_row.addStretch()
@@ -118,7 +118,7 @@ class MemberTab(QWidget):
         self._table.setHorizontalHeaderLabels(COLS)
         self._table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self._table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
-        self._table.horizontalHeader().setSectionResizeMode(_COL_ORG_NAME, QHeaderView.ResizeMode.Stretch)
+        self._table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
         self._table.horizontalHeader().setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self._table.horizontalHeader().customContextMenuRequested.connect(self._show_column_menu)
         self._table.itemDoubleClicked.connect(self._on_edit)
@@ -200,7 +200,7 @@ class MemberTab(QWidget):
         add_btn.clicked.connect(self._on_add)
         edit_btn = QPushButton("編集")
         edit_btn.clicked.connect(self._on_edit)
-        withdraw_btn = QPushButton("脱会処理")
+        withdraw_btn = QPushButton("委託解除")
         withdraw_btn.clicked.connect(self._on_withdraw)
         history_btn = QPushButton("変更履歴")
         history_btn.clicked.connect(self._on_history)
@@ -356,6 +356,18 @@ class MemberTab(QWidget):
         if not logs:
             self._log_vbox.addWidget(QLabel("対応履歴はありません。"))
 
+    def refresh_categories(self):
+        current_id = self._cat_combo.currentData()
+        self._cat_combo.clear()
+        self._cat_combo.addItem("カテゴリなし", None)
+        for cat in self._activity_svc.get_categories():
+            self._cat_combo.addItem(cat.name, cat.id)
+        # 選択を復元（削除されていれば先頭に戻す）
+        for i in range(self._cat_combo.count()):
+            if self._cat_combo.itemData(i) == current_id:
+                self._cat_combo.setCurrentIndex(i)
+                break
+
     def _on_save_activity(self):
         m = self._selected_member()
         if not m:
@@ -370,8 +382,14 @@ class MemberTab(QWidget):
             self._activity_svc.add_log(m.id, content, cat_ids, self._config.last_staff_name)
             self._content_edit.clear()
             self._cat_combo.setCurrentIndex(0)
-            self._load_activity_logs(m.id)
+            saved_id = m.id
             self._refresh()  # 最終対応日更新のため
+            # refresh後も同じ行を選択し直す（ソート等で行位置が変わる場合に対応）
+            for row in range(self._table.rowCount()):
+                item = self._table.item(row, 0)
+                if item and item.data(Qt.ItemDataRole.UserRole) == saved_id:
+                    self._table.selectRow(row)
+                    break
         except Exception as e:
             QMessageBox.critical(self, "エラー", str(e))
 
