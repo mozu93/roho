@@ -3,7 +3,7 @@ import webbrowser
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QFormLayout, QGroupBox, QListWidget,
     QListWidgetItem, QLineEdit, QPushButton, QMessageBox, QLabel, QTextEdit,
-    QSplitter, QFileDialog,
+    QSplitter, QFileDialog, QScrollArea, QFrame,
 )
 from PyQt6.QtCore import Qt, QThread, pyqtSignal
 from PyQt6.QtGui import QFont
@@ -118,7 +118,7 @@ class SettingsTab(QWidget):
         sg.setSpacing(4)
 
         self._staff_list = QListWidget()
-        self._staff_list.setMaximumHeight(90)
+        self._staff_list.setFixedHeight(80)
         self._staff_list.currentItemChanged.connect(self._on_staff_selected)
         sg.addWidget(self._staff_list)
 
@@ -137,13 +137,14 @@ class SettingsTab(QWidget):
         sg.addWidget(QLabel("選択した職員の署名："))
         self._sig_edit = QTextEdit()
         self._sig_edit.setPlaceholderText("メール末尾に自動的に追加される署名を入力してください")
-        sg.addWidget(self._sig_edit, stretch=1)
+        self._sig_edit.setFixedHeight(80)
+        sg.addWidget(self._sig_edit)
 
         sig_save_btn = QPushButton("署名を保存")
         sig_save_btn.clicked.connect(self._on_save_signature)
         sg.addWidget(sig_save_btn)
 
-        rv.addWidget(staff_group, stretch=1)
+        rv.addWidget(staff_group)
 
         # データフォルダ設定
         data_group = QGroupBox("データフォルダ設定")
@@ -200,7 +201,15 @@ class SettingsTab(QWidget):
         self._update_auth_status()
 
         rv.addWidget(m365_group)
-        splitter.addWidget(right)
+        rv.addStretch()
+
+        right_scroll = QScrollArea()
+        right_scroll.setWidget(right)
+        right_scroll.setWidgetResizable(True)
+        right_scroll.setFrameShape(QFrame.Shape.NoFrame)
+        right_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+
+        splitter.addWidget(right_scroll)
         splitter.setSizes([420, 340])
         root.addWidget(splitter)
 
