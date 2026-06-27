@@ -33,13 +33,9 @@ class UpdateBanner(QWidget):
         self._progress_bar.hide()
         layout.addWidget(self._progress_bar)
         self._action_btn = QPushButton("ダウンロード")
-        self._action_btn.setFixedWidth(130)
+        self._action_btn.setMinimumWidth(180)
         self._action_btn.clicked.connect(self._on_action)
         layout.addWidget(self._action_btn)
-        close_btn = QPushButton("×")
-        close_btn.setFixedSize(24, 24)
-        close_btn.clicked.connect(self.hide)
-        layout.addWidget(close_btn)
 
     def _start_check(self):
         self._checker = UpdateChecker(self._repo, self._current_version, parent=self)
