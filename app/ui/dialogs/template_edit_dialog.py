@@ -3,7 +3,15 @@ from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QFormLayout, QGroupBox,
     QLineEdit, QTextEdit, QPushButton, QLabel, QMessageBox,
 )
+from PyQt6.QtCore import Qt, QEvent
 from app.services.template_service import TemplateService
+
+_PLACEHOLDERS = [
+    ("{事業所名}", "事業所名"),
+    ("{代表者名}", "代表者名"),
+    ("{会員No.}", "会員No."),
+    ("{所属・役職}", "所属・役職"),
+]
 
 
 class TemplateEditDialog(QDialog):
@@ -13,8 +21,9 @@ class TemplateEditDialog(QDialog):
         self._template_id = template_id
         self._svc = TemplateService(engine)
         self.saved = False
+        self._last_focused = None
         self.setWindowTitle("テンプレート編集" if template_id else "テンプレート追加")
-        self.resize(600, 480)
+        self.resize(600, 520)
         self._build_ui()
         if template_id:
             self._load(template_id)
@@ -31,11 +40,24 @@ class TemplateEditDialog(QDialog):
         fl.addRow("本文：", self._body_edit)
         layout.addWidget(grp)
 
-        hint = QLabel(
-            "使用できるプレースホルダー：{事業所名} {代表者名} {会員No.} {所属・役職}"
-        )
-        hint.setStyleSheet("color:#666; font-size:9pt;")
-        layout.addWidget(hint)
+        # 件名・本文のフォーカスを追跡してプレースホルダー挿入先を決定
+        self._subject_edit.installEventFilter(self)
+        self._body_edit.installEventFilter(self)
+
+        # プレースホルダーボタン行
+        ph_row = QHBoxLayout()
+        ph_lbl = QLabel("挿入：")
+        ph_lbl.setStyleSheet("color:#666; font-size:9pt;")
+        ph_row.addWidget(ph_lbl)
+        for token, label in _PLACEHOLDERS:
+            btn = QPushButton(label)
+            btn.setFixedHeight(24)
+            btn.setStyleSheet("font-size:9pt; padding:0 8px;")
+            btn.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+            btn.clicked.connect(lambda checked, t=token: self._insert_placeholder(t))
+            ph_row.addWidget(btn)
+        ph_row.addStretch()
+        layout.addLayout(ph_row)
 
         btn_row = QHBoxLayout()
         save_btn = QPushButton("保存")
@@ -47,6 +69,21 @@ class TemplateEditDialog(QDialog):
         btn_row.addWidget(cancel_btn)
         btn_row.addWidget(save_btn)
         layout.addLayout(btn_row)
+
+    def eventFilter(self, obj, event):
+        if event.type() == QEvent.Type.FocusIn and obj in (self._subject_edit, self._body_edit):
+            self._last_focused = obj
+        return super().eventFilter(obj, event)
+
+    def _insert_placeholder(self, token: str):
+        target = self._last_focused or self._body_edit
+        if isinstance(target, QLineEdit):
+            pos = target.cursorPosition()
+            text = target.text()
+            target.setText(text[:pos] + token + text[pos:])
+            target.setCursorPosition(pos + len(token))
+        else:
+            target.insertPlainText(token)
 
     def _load(self, template_id: int):
         t = self._svc.get(template_id)

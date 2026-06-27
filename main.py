@@ -56,16 +56,18 @@ QPushButton#sendButton:disabled {
     border-color: #bfdbfe;
     color: white;
 }
+QListWidget, QLineEdit, QTextEdit, QComboBox {
+    font-size: 11pt;
+}
+QTabBar::tab {
+    font-size: 13pt;
+}
 QTableWidget {
     alternate-background-color: #f0f5fb;
     gridline-color: #d1d9e0;
 }
 QTableWidget::item:hover {
     background: #ffe4ec;
-}
-QTableWidget::item:selected {
-    background: #ffb6c8;
-    color: #2d3748;
 }
 QTableWidget QHeaderView::section {
     background: #3d5a80;
@@ -86,7 +88,7 @@ def main():
     app = QApplication(sys.argv)
     app.setApplicationName("労働保険名簿管理システム")
     font = app.font()
-    font.setPointSize(font.pointSize() + 2)
+    font.setPointSize(11)
     app.setFont(font)
     app.setStyleSheet(_APP_STYLE)
     try:

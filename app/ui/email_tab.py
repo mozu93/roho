@@ -17,6 +17,23 @@ BRANCH_LABELS = {"ippan": "0", "kensetsu_koyou": "2", "ringyo": "4",
                  "kensetsu_genba": "5", "kensetsu_jimusho": "6"}
 
 
+class _AuthWorker(QThread):
+    succeeded = pyqtSignal()
+    failed = pyqtSignal(str)
+
+    def __init__(self, email_svc, flow):
+        super().__init__()
+        self._email_svc = email_svc
+        self._flow = flow
+
+    def run(self):
+        try:
+            self._email_svc.acquire_token_with_device_flow(self._flow)
+            self.succeeded.emit()
+        except Exception as e:
+            self.failed.emit(str(e))
+
+
 class SendWorker(QThread):
     progress = pyqtSignal(int, int)
     finished = pyqtSignal(dict)
@@ -242,18 +259,71 @@ class EmailTab(QWidget):
         self._attach_label.setText("なし")
 
     def _on_auth(self):
+        import webbrowser
+        from PyQt6.QtWidgets import QDialog, QVBoxLayout
+        from PyQt6.QtGui import QFont
         try:
             self._email_svc.get_token()
+            QMessageBox.information(self, "確認", "すでにサインイン済みです。")
         except DeviceCodeRequired as e:
-            # デバイスコードフローのメッセージを表示
-            QMessageBox.information(self, "Microsoft サインイン", str(e))
-            try:
-                self._email_svc.acquire_token_with_device_flow(e.flow)
-                QMessageBox.information(self, "完了", "サインインが完了しました。")
-            except Exception as ex:
-                QMessageBox.critical(self, "認証エラー", str(ex))
+            flow = e.flow
+            url  = flow.get("verification_uri", "https://microsoft.com/devicelogin")
+            code = flow.get("user_code", "")
+
+            # ブラウザを自動で開く
+            webbrowser.open(url)
+
+            # 案内ダイアログ（非ブロッキング）
+            dlg = QDialog(self)
+            dlg.setWindowTitle("Microsoft 365 サインイン")
+            dlg.setFixedWidth(460)
+            v = QVBoxLayout(dlg)
+            v.setSpacing(10)
+
+            v.addWidget(QLabel("ブラウザが開きました。以下のコードを入力してサインインしてください："))
+
+            code_label = QLabel(code)
+            f = QFont()
+            f.setPointSize(22)
+            f.setBold(True)
+            code_label.setFont(f)
+            code_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            code_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+            code_label.setStyleSheet(
+                "background:#F3F4F6; border:1px solid #D1D5DB;"
+                "border-radius:6px; padding:8px; letter-spacing:4px;")
+            v.addWidget(code_label)
+
+            url_label = QLabel(f'<a href="{url}">{url}</a>')
+            url_label.setOpenExternalLinks(True)
+            url_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            v.addWidget(url_label)
+
+            wait = QLabel("サインインが完了すると自動的にこのダイアログが閉じます...")
+            wait.setStyleSheet("color:#6B7280; font-size:9pt;")
+            wait.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            v.addWidget(wait)
+
+            self._auth_dlg = dlg
+
+            self._auth_worker = _AuthWorker(self._email_svc, flow)
+            self._auth_worker.succeeded.connect(self._on_auth_success)
+            self._auth_worker.failed.connect(self._on_auth_failed)
+            self._auth_worker.start()
+
+            dlg.exec()
         except Exception as ex:
             QMessageBox.critical(self, "エラー", str(ex))
+
+    def _on_auth_success(self):
+        if hasattr(self, "_auth_dlg"):
+            self._auth_dlg.accept()
+        QMessageBox.information(self, "完了", "Microsoft 365 サインインが完了しました。")
+
+    def _on_auth_failed(self, msg: str):
+        if hasattr(self, "_auth_dlg"):
+            self._auth_dlg.reject()
+        QMessageBox.critical(self, "認証エラー", msg)
 
     def _on_test_send(self):
         if not self._selected_template:

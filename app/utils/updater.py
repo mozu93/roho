@@ -79,9 +79,12 @@ def download_installer(url: str, dest_path: str, progress_cb=None) -> str:
 
 
 def launch_installer(path: str) -> None:
-    bat = os.path.join(tempfile.gettempdir(), "rouho_update.bat")
-    with open(bat, "w") as f:
-        f.write(f'@echo off\nping 127.0.0.1 -n 3 >nul\n"{path}" /SILENT\n')
+    # NamedTemporaryFile で一意パスを生成（固定名ファイルへのシンボリックリンク攻撃対策）
+    with tempfile.NamedTemporaryFile(
+        mode="w", suffix=".bat", delete=False, dir=tempfile.gettempdir()
+    ) as f:
+        bat = f.name
+        f.write(f'@echo off\ntimeout /t 3 /nobreak >nul\n"{path}" /SILENT\n')
     subprocess.Popen(["cmd", "/c", bat], creationflags=subprocess.CREATE_NO_WINDOW)
 
 

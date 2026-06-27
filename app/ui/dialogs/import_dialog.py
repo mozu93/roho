@@ -40,7 +40,7 @@ class ImportDialog(QDialog):
         layout.addLayout(btn_row)
 
     def _on_browse(self):
-        path, _ = QFileDialog.getOpenFileName(self, "Excelファイルを選択", "", "Excel (*.xlsx *.xls)")
+        path, _ = QFileDialog.getOpenFileName(self, "Excelファイルを選択", "", "Excel (*.xlsx)")
         if path:
             self._path_edit.setText(path)
 
@@ -53,10 +53,17 @@ class ImportDialog(QDialog):
             svc = ImportService(self._engine)
             result = svc.import_excel(path, overwrite=self._overwrite_chk.isChecked(),
                                       staff_name=self._staff_name)
-            QMessageBox.information(
-                self, "インポート完了",
-                f"追加：{result['added']}件\n更新：{result['updated']}件\nスキップ：{result['skipped']}件"
+            msg = (
+                f"追加：{result['added']}件\n"
+                f"更新：{result['updated']}件\n"
+                f"スキップ：{result['skipped']}件"
             )
+            details = result.get("skipped_details", [])
+            if details:
+                msg += "\n\n【スキップ理由】\n" + "\n".join(details[:20])
+                if len(details) > 20:
+                    msg += f"\n… 他{len(details) - 20}件"
+            QMessageBox.information(self, "インポート完了", msg)
             self.accept()
         except Exception as e:
             QMessageBox.critical(self, "インポートエラー", str(e))

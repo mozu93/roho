@@ -43,6 +43,7 @@ class Member(Base):
     label_tag = Column(String)
     employment_ins_no = Column(String)
     note = Column(Text)
+    registered_date = Column(Date, nullable=True)
     is_active = Column(Boolean, nullable=False, default=True)
     withdrawn_at = Column(Date)
     withdraw_reason = Column(Text)
@@ -137,6 +138,7 @@ class Staff(Base):
     id = Column(Integer, primary_key=True)
     name = Column(String, nullable=False)
     is_active = Column(Boolean, nullable=False, default=True)
+    signature = Column(Text, nullable=True)
 
 
 class EmailTemplate(Base):

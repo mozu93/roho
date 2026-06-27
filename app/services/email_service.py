@@ -16,7 +16,7 @@ class EmailService:
         self._config = config
         self._cache = msal.SerializableTokenCache()
         if os.path.exists(TOKEN_CACHE_FILE):
-            with open(TOKEN_CACHE_FILE, "rb") as f:
+            with open(TOKEN_CACHE_FILE, "r", encoding="utf-8") as f:
                 self._cache.deserialize(f.read())
         self._app = None
 
@@ -32,7 +32,7 @@ class EmailService:
     def _save_cache(self):
         if self._cache.has_state_changed:
             fd = os.open(TOKEN_CACHE_FILE, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-            with os.fdopen(fd, "wb") as f:
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
                 f.write(self._cache.serialize())
 
     def get_token(self) -> str:
@@ -59,6 +59,19 @@ class EmailService:
             raise RuntimeError(f"認証エラー: {result.get('error_description', '不明なエラー')}")
         self._save_cache()
         return result["access_token"]
+
+    def get_token_silent(self) -> str:
+        """キャッシュ済みトークンを返す。未認証なら RuntimeError を送出する"""
+        app = self._get_app()
+        accounts = app.get_accounts()
+        if accounts:
+            result = app.acquire_token_silent(SCOPES, account=accounts[0])
+            if result and "access_token" in result:
+                self._save_cache()
+                return result["access_token"]
+        raise RuntimeError(
+            "未認証です。「メール送信」タブで Microsoft 365 サインインを行ってください。"
+        )
 
     def is_authenticated(self) -> bool:
         app = self._get_app()

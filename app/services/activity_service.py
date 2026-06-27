@@ -59,6 +59,7 @@ class ActivityService:
                     staff_id=s.id,
                     confirmed_at=None,
                 ))
+            session.flush()
             _ = log.categories
             session.expunge_all()
             return log
@@ -69,46 +70,48 @@ class ActivityService:
             if not staff:
                 return []
 
-            # 未読の activity_logs
-            unread_logs = (
-                session.query(ActivityConfirmation)
-                .filter_by(staff_id=staff.id, confirmed_at=None)
+            # 未読の activity_logs を JOIN で一括取得（N+1 回避）
+            act_rows = (
+                session.query(ActivityConfirmation, ActivityLog, Member)
+                .join(ActivityLog, ActivityConfirmation.activity_log_id == ActivityLog.id)
+                .join(Member, ActivityLog.member_id == Member.id)
+                .filter(
+                    ActivityConfirmation.staff_id == staff.id,
+                    ActivityConfirmation.confirmed_at.is_(None),
+                )
                 .all()
             )
             results = []
-            for conf in unread_logs:
-                log = session.get(ActivityLog, conf.activity_log_id)
-                if not log:
-                    continue
-                member = session.get(Member, log.member_id)
+            for conf, log, member in act_rows:
                 results.append({
                     "type": "activity",
                     "id": conf.id,
                     "event_id": log.id,
                     "member_id": log.member_id,
-                    "org_name": member.org_name if member else "",
+                    "org_name": member.org_name,
                     "logged_at": log.logged_at,
                     "logged_by": log.logged_by,
                     "content": log.content[:40],
                 })
 
-            # 未読の member_changes
-            unread_changes = (
-                session.query(ChangeConfirmation)
-                .filter_by(staff_id=staff.id, confirmed_at=None)
+            # 未読の member_changes を JOIN で一括取得（N+1 回避）
+            chg_rows = (
+                session.query(ChangeConfirmation, MemberChange, Member)
+                .join(MemberChange, ChangeConfirmation.member_change_id == MemberChange.id)
+                .join(Member, MemberChange.member_id == Member.id)
+                .filter(
+                    ChangeConfirmation.staff_id == staff.id,
+                    ChangeConfirmation.confirmed_at.is_(None),
+                )
                 .all()
             )
-            for conf in unread_changes:
-                change = session.get(MemberChange, conf.member_change_id)
-                if not change:
-                    continue
-                member = session.get(Member, change.member_id)
+            for conf, change, member in chg_rows:
                 results.append({
                     "type": "change",
                     "id": conf.id,
                     "event_id": change.id,
                     "member_id": change.member_id,
-                    "org_name": member.org_name if member else "",
+                    "org_name": member.org_name,
                     "logged_at": change.changed_at,
                     "logged_by": change.changed_by,
                     "content": change.change_reason[:40],
@@ -158,12 +161,15 @@ class ActivityService:
             ).all():
                 conf.confirmed_at = now
 
-    def search_logs(self, keyword: str, member_id: int = None) -> list[dict]:
+    def search_logs(self, keyword: str, member_id: int = None,
+                    include_inactive: bool = False) -> list[dict]:
         with get_session(self._engine) as session:
             q = (
                 session.query(ActivityLog, Member)
                 .join(Member, ActivityLog.member_id == Member.id)
             )
+            if not include_inactive:
+                q = q.filter(Member.is_active == True)
             if member_id is not None:
                 q = q.filter(ActivityLog.member_id == member_id)
             if keyword:
@@ -176,12 +182,41 @@ class ActivityService:
                     "log_id": log.id,
                     "member_id": member.id,
                     "org_name": member.org_name,
+                    "is_active": member.is_active,
                     "logged_at": log.logged_at,
                     "logged_by": log.logged_by,
                     "categories": [c.name for c in log.categories],
                     "content": log.content,
                 })
             return results
+
+    def get_last_changed_at_map(self, member_ids: list[int]) -> dict:
+        """各メンバーの最終変更日時を {member_id: datetime} で返す（変更履歴ベース）"""
+        if not member_ids:
+            return {}
+        from sqlalchemy import func
+        with get_session(self._engine) as session:
+            rows = (
+                session.query(MemberChange.member_id, func.max(MemberChange.changed_at))
+                .filter(MemberChange.member_id.in_(member_ids))
+                .group_by(MemberChange.member_id)
+                .all()
+            )
+            return {mid: dt for mid, dt in rows}
+
+    def get_last_logged_at_map(self, member_ids: list[int]) -> dict:
+        """各メンバーの最終対応日時を {member_id: datetime} で返す（一括取得）"""
+        if not member_ids:
+            return {}
+        from sqlalchemy import func
+        with get_session(self._engine) as session:
+            rows = (
+                session.query(ActivityLog.member_id, func.max(ActivityLog.logged_at))
+                .filter(ActivityLog.member_id.in_(member_ids))
+                .group_by(ActivityLog.member_id)
+                .all()
+            )
+            return {mid: dt for mid, dt in rows}
 
     def get_categories(self) -> list[ActivityCategory]:
         with get_session(self._engine) as session:

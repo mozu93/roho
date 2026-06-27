@@ -85,20 +85,23 @@ class MemberService:
         data = dict(data)  # コピーして元データを保護
         with get_session(self._engine) as session:
             m = session.get(Member, member_id)
+            if not m:
+                raise ValueError(f"会員ID {member_id} が見つかりません。")
             # 更新前のスナップショットを取得
             snapshot = json.dumps(self.member_to_dict(m), ensure_ascii=False)
 
-            entries_data = data.pop("insurance_entries", [])
+            entries_data = data.pop("insurance_entries", None)
             for k, v in data.items():
                 setattr(m, k, v)
             m.updated_at = datetime.now()
 
-            # 保険番号を更新（全削除→再作成）
-            for e in list(m.insurance_entries):
-                session.delete(e)
-            session.flush()
-            for e in entries_data:
-                session.add(InsuranceEntry(member_id=m.id, **e))
+            # insurance_entries が明示的に渡された場合のみ更新（全削除→再作成）
+            if entries_data is not None:
+                for e in list(m.insurance_entries):
+                    session.delete(e)
+                session.flush()
+                for e in entries_data:
+                    session.add(InsuranceEntry(member_id=m.id, **e))
 
             # 変更履歴を記録
             change = MemberChange(
@@ -123,6 +126,7 @@ class MemberService:
                     staff_id=s.id,
                     confirmed_at=None,  # None=未読
                 ))
+            session.flush()
 
             _ = m.insurance_entries
             session.expunge_all()
@@ -135,6 +139,40 @@ class MemberService:
     def reactivate(self, member_id: int, staff_name: str):
         data = {"is_active": True, "withdrawn_at": None, "withdraw_reason": None}
         return self.update(member_id, data, "再加入", staff_name)
+
+    def undo_withdraw(self, member_id: int, staff_name: str):
+        """委託解除を取消し、名簿に戻す"""
+        data = {"is_active": True, "withdrawn_at": None, "withdraw_reason": None}
+        return self.update(member_id, data, "委託解除を取消", staff_name)
+
+    def delete(self, member_id: int):
+        """会員を関連データごと完全削除する"""
+        with get_session(self._engine) as session:
+            m = session.get(Member, member_id)
+            if not m:
+                return
+            for change in list(m.member_changes):
+                session.delete(change)   # ChangeConfirmation は cascade
+            for log in list(m.activity_logs):
+                session.delete(log)      # ActivityConfirmation は cascade
+            session.flush()
+            session.delete(m)            # InsuranceEntry は cascade
+
+    def find_by_member_number(self, member_number: str):
+        with get_session(self._engine) as session:
+            m = session.query(Member).filter_by(member_number=member_number).first()
+            if m:
+                session.expunge_all()
+            return m
+
+    def get_current_snapshot(self, member_id: int) -> dict:
+        """セッション内で member_to_dict を呼び DetachedInstanceError を回避する"""
+        with get_session(self._engine) as session:
+            m = session.get(Member, member_id)
+            if not m:
+                return {}
+            _ = m.insurance_entries
+            return self.member_to_dict(m)
 
     def get_changes(self, member_id: int) -> list:
         with get_session(self._engine) as session:
@@ -149,23 +187,37 @@ class MemberService:
 
     def member_to_dict(self, member: Member) -> dict:
         return {
-            "id": member.id,
-            "company_code": member.company_code,
-            "member_number": member.member_number,
-            "is_member": member.is_member,
-            "org_name": member.org_name,
-            "org_kana": member.org_kana,
-            "rep_name": member.rep_name,
-            "tel": member.tel,
-            "address": member.address,
-            "is_active": member.is_active,
+            "company_code":      member.company_code,
+            "member_number":     member.member_number,
+            "is_member":         member.is_member,
+            "org_name":          member.org_name,
+            "org_kana":          member.org_kana,
+            "dept_title":        member.dept_title,
+            "rep_name":          member.rep_name,
+            "rep_kana":          member.rep_kana,
+            "email":             member.email,
+            "tel_area":          member.tel_area,
+            "tel":               member.tel,
+            "fax_area":          member.fax_area,
+            "fax":               member.fax,
+            "postal_code":       member.postal_code,
+            "address":           member.address,
+            "postal_code_mail":  member.postal_code_mail,
+            "address_mail":      member.address_mail,
+            "addressee_mail":    member.addressee_mail,
+            "employment_ins_no": member.employment_ins_no,
+            "note":              member.note,
+            "registered_date":   member.registered_date.isoformat() if member.registered_date else None,
+            "is_active":         member.is_active,
+            "withdrawn_at":      member.withdrawn_at.isoformat() if member.withdrawn_at else None,
+            "withdraw_reason":   member.withdraw_reason,
             "insurance_entries": [
                 {
-                    "ins_type": e.ins_type,
+                    "ins_type":      e.ins_type,
                     "branch_number": e.branch_number,
-                    "ins_number": e.ins_number,
-                    "is_tokubetsu": e.is_tokubetsu,
-                    "is_ikkatsu": e.is_ikkatsu,
+                    "ins_number":    e.ins_number,
+                    "is_tokubetsu":  e.is_tokubetsu,
+                    "is_ikkatsu":    e.is_ikkatsu,
                 }
                 for e in member.insurance_entries
             ],

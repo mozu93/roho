@@ -33,6 +33,8 @@ class TemplateService:
     def update(self, template_id: int, name: str, subject: str, body: str) -> EmailTemplate:
         with get_session(self._engine) as session:
             t = session.get(EmailTemplate, template_id)
+            if not t:
+                raise ValueError(f"テンプレートID {template_id} が見つかりません。")
             t.name = name
             t.subject = subject
             t.body = body

@@ -13,6 +13,7 @@ a = Analysis(
     binaries=[],
     datas=[
         ("assets", "assets"),
+        ("assets/manuals", "assets/manuals"),
     ],
     hiddenimports=[
         "sqlalchemy.dialects.sqlite",

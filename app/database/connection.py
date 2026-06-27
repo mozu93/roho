@@ -1,7 +1,15 @@
+import re
 from contextlib import contextmanager
 from sqlalchemy import create_engine, event, text
 from sqlalchemy.orm import Session
 from app.database.models import Base
+
+
+def _safe_col(name: str) -> str:
+    """カラム名が英数字・アンダースコアのみか検証する（動的SQL生成時のインジェクション対策）"""
+    if not re.fullmatch(r'[a-zA-Z_][a-zA-Z0-9_]*', name):
+        raise ValueError(f"不正なカラム名が検出されました: {name!r}")
+    return name
 
 
 def _migrate(engine) -> None:
@@ -21,7 +29,7 @@ def _migrate(engine) -> None:
         if has_company_code and has_is_member and not member_no_notnull:
             return  # 最新スキーマ
 
-        col_names = [r[1] for r in rows]
+        col_names = [_safe_col(r[1]) for r in rows]
         select_cols = []
         for c in col_names:
             if c == "company_code":
@@ -63,6 +71,38 @@ def _migrate(engine) -> None:
         conn.commit()
 
 
+def _migrate_registered_date(engine) -> None:
+    """members テーブルに registered_date カラムを追加する"""
+    with engine.connect() as conn:
+        cols = [r[1] for r in conn.execute(text("PRAGMA table_info(members)")).fetchall()]
+        if "registered_date" not in cols:
+            conn.execute(text("ALTER TABLE members ADD COLUMN registered_date DATE"))
+            conn.commit()
+
+
+def _migrate_staff_signature(engine) -> None:
+    """staff テーブルに signature カラムを追加する"""
+    with engine.connect() as conn:
+        cols = [r[1] for r in conn.execute(text("PRAGMA table_info(staff)")).fetchall()]
+        if "signature" not in cols:
+            conn.execute(text("ALTER TABLE staff ADD COLUMN signature TEXT"))
+            conn.commit()
+
+
+def _ensure_indexes(engine) -> None:
+    """集計クエリを高速化するインデックスを初回起動時に作成する"""
+    with engine.connect() as conn:
+        conn.execute(text(
+            "CREATE INDEX IF NOT EXISTS ix_member_changes_member_id"
+            " ON member_changes(member_id)"
+        ))
+        conn.execute(text(
+            "CREATE INDEX IF NOT EXISTS ix_activity_logs_member_id"
+            " ON activity_logs(member_id)"
+        ))
+        conn.commit()
+
+
 def get_engine(db_path: str):
     engine = create_engine(
         f"sqlite:///{db_path}",
@@ -76,6 +116,9 @@ def get_engine(db_path: str):
 
     Base.metadata.create_all(engine)
     _migrate(engine)
+    _migrate_registered_date(engine)
+    _migrate_staff_signature(engine)
+    _ensure_indexes(engine)
     return engine
 
 

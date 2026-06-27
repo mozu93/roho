@@ -2,7 +2,7 @@
 from datetime import date
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QFormLayout,
-    QDateEdit, QLineEdit, QPushButton, QMessageBox, QGroupBox,
+    QDateEdit, QLineEdit, QPushButton, QMessageBox, QGroupBox, QLabel,
 )
 from PyQt6.QtCore import QDate
 from app.services.member_service import MemberService
@@ -16,12 +16,20 @@ class WithdrawDialog(QDialog):
         self._member_id = member_id
         self._svc = MemberService(engine)
         self.withdrawn = False
-        self.setWindowTitle("委託解除")
-        self.setFixedSize(400, 200)
+
+        m = self._svc.get(member_id)
+        self._org_name = m.org_name if m else ""
+        self.setWindowTitle(f"委託解除 — {self._org_name}")
+        self.setFixedSize(400, 230)
         self._build_ui()
 
     def _build_ui(self):
         layout = QVBoxLayout(self)
+
+        target_lbl = QLabel(f"対象：{self._org_name}")
+        target_lbl.setStyleSheet("font-weight: bold; color: #1e3a5f; padding: 4px 0;")
+        layout.addWidget(target_lbl)
+
         grp = QGroupBox("委託解除情報を入力")
         fl = QFormLayout(grp)
         self._date_edit = QDateEdit(QDate.currentDate())
@@ -51,7 +59,7 @@ class WithdrawDialog(QDialog):
         qd = self._date_edit.date()
         withdrawn_at = date(qd.year(), qd.month(), qd.day())
         reply = QMessageBox.question(
-            self, "確認", "委託解除を実行してよいですか？",
+            self, "確認", f"「{self._org_name}」を委託解除してよいですか？",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
         )
         if reply != QMessageBox.StandardButton.Yes:
