@@ -117,17 +117,17 @@
     <tr><th>ファイル</th><th>場所</th><th>説明</th></tr>
     <tr><td><code>Rouho.exe</code></td><td><code>%LOCALAPPDATA%\Rouho\</code></td><td>アプリ本体</td></tr>
     <tr><td><code>app_config.json</code></td><td><code>%LOCALAPPDATA%\Rouho\</code></td><td>設定ファイル（最終ログイン名・列幅等）</td></tr>
-    <tr><td><code>rouho.db</code></td><td>共有フォルダ or <code>%LOCALAPPDATA%\Rouho\</code></td><td>データベース本体</td></tr>
-    <tr><td><code>backups\</code></td><td><code>app_config.json</code> と同フォルダ</td><td>自動バックアップ保存先</td></tr>
+    <tr><td><code>rouho.db</code></td><td>データフォルダ設定で指定したフォルダ（未指定時は <code>%LOCALAPPDATA%\Rouho\</code>）</td><td>データベース本体</td></tr>
+    <tr><td><code>backups\</code></td><td>データフォルダ設定で指定したフォルダ配下（未指定時は <code>%LOCALAPPDATA%\Rouho\backups\</code>）</td><td>自動バックアップ保存先</td></tr>
   </table>
-  <div class="tip">DBファイルの場所は設定タブで変更できます。共有フォルダ上のパスを指定することで複数PCでの同時利用が可能です。</div>
+  <div class="tip">設定タブ →「データフォルダ設定」で共有フォルダのパスを指定すると、DBとバックアップが共有フォルダに置かれ、複数PCでの同時利用が可能になります。</div>
 
   <!-- ========== 共有フォルダ設定 ========== -->
   <h2 id="shared">共有フォルダ設定（複数PC環境）</h2>
-  <div class="step"><div class="step-num">1</div><div class="step-body">サーバーまたは共有PCに <code>\\サーバー名\rouho\</code> のような共有フォルダを作成し、<code>rouho.db</code> を配置します。</div></div>
-  <div class="step"><div class="step-num">2</div><div class="step-body">各PCでアプリを起動し、設定タブ →「DBファイルのパス」に共有フォルダのパスを入力して保存します。</div></div>
+  <div class="step"><div class="step-num">1</div><div class="step-body">サーバーまたは共有PCに <code>\\サーバー名\rouho\</code> のような共有フォルダを作成します。初回起動PCの <code>rouho.db</code> をそのフォルダにコピーします。</div></div>
+  <div class="step"><div class="step-num">2</div><div class="step-body">各PCでアプリを起動し、設定タブ →「データフォルダ設定」の「参照...」ボタンで共有フォルダを選択し「保存」します。</div></div>
   <div class="step"><div class="step-num">3</div><div class="step-body">アプリを再起動して、共有DBに接続されていることを確認します。</div></div>
-  <div class="warn">バックアップは各PCの <code>app_config.json</code> と同フォルダに保存されます。共有フォルダではありません。重要なバックアップは定期的に別の場所にコピーしてください。</div>
+  <div class="warn">各PCの <code>app_config.json</code>（ログイン名・ウィンドウ位置等）は引き続き各PCのローカル（<code>%LOCALAPPDATA%\Rouho\</code>）に保存されます。</div>
 
   <!-- ========== 職員管理 ========== -->
   <h2 id="staff">設定タブ — 職員管理</h2>
@@ -186,8 +186,8 @@
     <tr><td>32〜90日前</td><td>月1件</td><td>3件</td></tr>
     <tr><td>90日超</td><td>自動削除</td><td>—</td></tr>
   </table>
-  <p>保存場所：<code>app_config.json</code> と同じフォルダ内の <code>backups\</code> フォルダ</p>
-  <div class="danger">バックアップはアプリを起動したPCのローカルに保存されます。PC故障に備えて、定期的に外付けHDDやクラウドストレージにコピーすることを強く推奨します。</div>
+  <p>保存場所：データフォルダ設定で指定したフォルダ内の <code>backups\</code>（未指定時は <code>%LOCALAPPDATA%\Rouho\backups\</code>）</p>
+  <div class="danger">共有フォルダを使わない単独PC運用の場合、バックアップはローカルにのみ保存されます。PC故障に備えて、定期的に外付けHDDやクラウドストレージにコピーすることを強く推奨します。</div>
 
   <!-- ========== 手動復元 ========== -->
   <h2 id="restore">手動復元</h2>
@@ -198,12 +198,12 @@
 
   <!-- ========== DBファイルの場所 ========== -->
   <h2 id="db-location">DBファイルの場所と手動バックアップ</h2>
-  <p>DBファイル（<code>rouho.db</code>）は以下のどちらかに配置されます：</p>
+  <p>DBファイル（<code>rouho.db</code>）は以下の場所に配置されます：</p>
   <ul>
-    <li>設定タブでパスを指定している場合：指定したパス</li>
+    <li>設定タブでデータフォルダを指定している場合：指定したフォルダ内</li>
     <li>未指定の場合：<code>%LOCALAPPDATA%\Rouho\rouho.db</code></li>
   </ul>
-  <p>バックアップは単純なファイルコピーで構いません。アプリを終了した状態でコピーしてください（WALモードのため、起動中のコピーは整合性が取れない場合があります）。</p>
+  <p>手動バックアップは単純なファイルコピーで構いません。アプリを終了した状態でコピーしてください（WALモードのため、起動中のコピーは整合性が取れない場合があります）。</p>
 
   <!-- ========== アップデート ========== -->
   <h2 id="update">アプリのアップデート</h2>
@@ -220,7 +220,7 @@
     <tr>
       <td>起動後に「データベースに接続できません」</td>
       <td>共有フォルダが見つからない</td>
-      <td>ネットワーク接続を確認し、<code>app_config.json</code> の <code>db_path</code> を修正する</td>
+      <td>ネットワーク接続を確認し、設定タブ →「データフォルダ設定」のパスを再設定する</td>
     </tr>
     <tr>
       <td>同時起動でデータが保存されない</td>

@@ -5,7 +5,8 @@ from dataclasses import dataclass, field, asdict
 
 @dataclass
 class AppConfig:
-    db_path: str = ""
+    data_dir: str = ""
+    db_path: str = ""  # 後方互換性のため保持（data_dir が優先）
     last_staff_name: str = ""
     m365_tenant_id: str = ""
     m365_client_id: str = ""

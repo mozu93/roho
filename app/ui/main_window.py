@@ -31,16 +31,23 @@ class MainWindow(QMainWindow):
         self._restore_geometry()
         QTimer.singleShot(200, self._show_notifications)
 
+    def _effective_data_dir(self) -> str:
+        """データフォルダのパスを返す（data_dir → db_path のフォルダ → config と同フォルダ の優先順）"""
+        if self._config.data_dir:
+            return self._config.data_dir
+        if self._config.db_path:
+            return os.path.dirname(self._config.db_path)
+        return os.path.dirname(self._config_path)
+
     def _init_db(self):
-        db_path = self._config.db_path or os.path.join(
-            os.path.dirname(self._config_path), "rouho.db"
-        )
+        data_dir = self._effective_data_dir()
+        db_path = os.path.join(data_dir, "rouho.db")
         self._engine = get_engine(db_path)
         self._db_path = db_path
 
     def _init_backup(self):
         from app.services.backup_service import BackupService
-        backup_dir = os.path.join(os.path.dirname(self._config_path), "backups")
+        backup_dir = os.path.join(self._effective_data_dir(), "backups")
         self._backup_svc = BackupService(self._db_path, backup_dir)
         self._backup_svc.run_if_needed()
 

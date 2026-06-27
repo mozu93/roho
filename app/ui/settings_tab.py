@@ -3,7 +3,7 @@ import webbrowser
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QFormLayout, QGroupBox, QListWidget,
     QListWidgetItem, QLineEdit, QPushButton, QMessageBox, QLabel, QTextEdit,
-    QSplitter,
+    QSplitter, QFileDialog,
 )
 from PyQt6.QtCore import Qt, QThread, pyqtSignal
 from PyQt6.QtGui import QFont
@@ -144,6 +144,26 @@ class SettingsTab(QWidget):
         sg.addWidget(sig_save_btn)
 
         rv.addWidget(staff_group, stretch=1)
+
+        # データフォルダ設定
+        data_group = QGroupBox("データフォルダ設定")
+        dg = QVBoxLayout(data_group)
+        dg.setSpacing(8)
+        dg.setContentsMargins(10, 12, 10, 12)
+        dg.addWidget(QLabel("DBファイルと自動バックアップの保存先フォルダ："))
+        data_dir_row = QHBoxLayout()
+        self._data_dir_edit = QLineEdit(self._config.data_dir)
+        self._data_dir_edit.setPlaceholderText("空白の場合は設定ファイルと同フォルダ（ローカル）")
+        browse_btn = QPushButton("参照...")
+        browse_btn.setFixedWidth(70)
+        browse_btn.clicked.connect(self._on_browse_data_dir)
+        data_dir_row.addWidget(self._data_dir_edit)
+        data_dir_row.addWidget(browse_btn)
+        dg.addLayout(data_dir_row)
+        save_data_btn = QPushButton("保存（再起動後に反映）")
+        save_data_btn.clicked.connect(self._on_save_data_dir)
+        dg.addWidget(save_data_btn)
+        rv.addWidget(data_group)
 
         # M365設定
         m365_group = QGroupBox("Microsoft 365設定")
@@ -304,6 +324,32 @@ class SettingsTab(QWidget):
         if reply == QMessageBox.StandardButton.Yes:
             self._act_svc.delete_category(item.data(Qt.ItemDataRole.UserRole))
             self._refresh_categories()
+
+    # ── データフォルダ設定 ──
+
+    def _on_browse_data_dir(self):
+        folder = QFileDialog.getExistingDirectory(
+            self, "データフォルダを選択", self._data_dir_edit.text() or ""
+        )
+        if folder:
+            self._data_dir_edit.setText(folder)
+
+    def _on_save_data_dir(self):
+        import os
+        new_dir = self._data_dir_edit.text().strip()
+        if new_dir and not os.path.isdir(new_dir):
+            QMessageBox.warning(self, "エラー",
+                f"指定したフォルダが存在しません：\n{new_dir}\n\n先にフォルダを作成してください。")
+            return
+        self._config.data_dir = new_dir
+        save_path = self._config_path or os.path.join(
+            os.path.dirname(os.path.abspath(__file__)), "..", "..", "app_config.json"
+        )
+        if self._config.save(os.path.normpath(save_path)):
+            QMessageBox.information(self, "保存",
+                "データフォルダを保存しました。\nアプリを再起動すると新しいフォルダが使われます。")
+        else:
+            QMessageBox.critical(self, "保存エラー", "設定ファイルの書き込みに失敗しました。")
 
     # ── M365設定・認証 ──
 
