@@ -62,6 +62,8 @@ class EmailService:
 
     def get_token_silent(self) -> str:
         """キャッシュ済みトークンを返す。未認証なら RuntimeError を送出する"""
+        if not self.is_configured():
+            raise RuntimeError("Microsoft 365 の設定（テナントID・クライアントID）が未設定です。設定タブで設定してください。")
         app = self._get_app()
         accounts = app.get_accounts()
         if accounts:
@@ -73,9 +75,17 @@ class EmailService:
             "未認証です。「メール送信」タブで Microsoft 365 サインインを行ってください。"
         )
 
+    def is_configured(self) -> bool:
+        return bool(self._config.m365_tenant_id and self._config.m365_client_id)
+
     def is_authenticated(self) -> bool:
-        app = self._get_app()
-        return bool(app.get_accounts())
+        if not self.is_configured():
+            return False
+        try:
+            app = self._get_app()
+            return bool(app.get_accounts())
+        except Exception:
+            return False
 
     def send(
         self,
