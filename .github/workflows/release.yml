@@ -1,0 +1,67 @@
+# .github/workflows/release.yml
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    permissions:
+      contents: write  # required to publish a Release
+
+    steps:
+      - uses: actions/checkout@v4  # TODO: pin to commit SHA, e.g. actions/checkout@<40-char-sha>
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5  # TODO: pin to commit SHA
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt pyinstaller pillow
+
+      - name: Get version from tag
+        id: get_version
+        env:
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          if ($env:REF_NAME -notmatch '^v\d+\.\d+\.\d+$') { throw "Bad tag: $env:REF_NAME" }
+          $version = $env:REF_NAME.TrimStart('v')
+          "VERSION=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+
+      - name: Generate icon
+        run: python generate_icon.py
+
+      - name: Build with PyInstaller
+        run: pyinstaller rouho.spec --clean
+
+      - name: Install Inno Setup
+        run: choco install innosetup --no-progress -y
+
+      - name: Build installer
+        env:
+          APP_VERSION: ${{ steps.get_version.outputs.VERSION }}
+        run: |
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" "/DMyAppVersion=$env:APP_VERSION" installer\setup.iss
+
+      - name: Generate checksum
+        run: |
+          $file = Get-ChildItem "installer_output\*.exe" | Select-Object -First 1
+          $hash = (Get-FileHash $file.FullName -Algorithm SHA256).Hash.ToLower()
+          "$hash  $($file.Name)" | Out-File -FilePath "installer_output\checksums.txt" -Encoding ascii
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2  # TODO: pin to commit SHA for supply-chain safety
+        with:
+          files: |
+            installer_output/Rouho_Setup_${{ steps.get_version.outputs.VERSION }}.exe
+            installer_output/checksums.txt
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

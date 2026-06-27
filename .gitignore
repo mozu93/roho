@@ -1,0 +1,35 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+*.egg-info/
+
+# PyInstaller
+dist/
+build/
+*.spec.bak
+
+# Inno Setup output
+installer_output/
+
+# Database & config (本番ファイルはコミットしない)
+rouho.db
+rouho.db-shm
+rouho.db-wal
+app_config.json
+
+# バックアップ
+backups/
+
+# Excelファイル（テンプレート・名簿データ）
+*.xlsx
+
+# MSAL token cache
+~/.rouho_token_cache.bin
+*.bin
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini

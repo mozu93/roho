@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ユーザーマニュアル — 労働保険名簿管理システム</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: "Meiryo", "Yu Gothic", sans-serif; font-size: 14px;
+         line-height: 1.7; color: #1a202c; background: #f7f8fa; }
+  a { color: #2563eb; text-decoration: none; }
+  a:hover { text-decoration: underline; }
+
+  /* レイアウト */
+  #sidebar {
+    position: fixed; top: 0; left: 0; width: 230px; height: 100vh;
+    background: #1e293b; color: #cbd5e1; overflow-y: auto; padding: 16px 0;
+  }
+  #sidebar h1 { font-size: 13px; font-weight: bold; color: #fff;
+                 padding: 0 16px 12px; border-bottom: 1px solid #334155; margin-bottom: 8px; }
+  #sidebar a { display: block; padding: 5px 16px; font-size: 13px; color: #94a3b8; }
+  #sidebar a:hover, #sidebar a.active { color: #fff; background: #334155; text-decoration: none; }
+  #sidebar .section-title { font-size: 10px; font-weight: bold; color: #64748b;
+                              text-transform: uppercase; padding: 10px 16px 4px; letter-spacing: 1px; }
+
+  main { margin-left: 230px; padding: 32px 40px; max-width: 900px; }
+
+  .hero { background: #eff6ff; border-left: 4px solid #2563eb;
+           padding: 16px 20px; border-radius: 0 6px 6px 0; margin-bottom: 32px; }
+  .hero h1 { font-size: 20px; color: #1e40af; margin-bottom: 4px; }
+  .hero p { color: #3b82f6; font-size: 13px; }
+
+  h2 { font-size: 18px; font-weight: bold; color: #1e293b;
+        border-bottom: 2px solid #e2e8f0; padding-bottom: 6px; margin: 32px 0 14px; }
+  h3 { font-size: 15px; font-weight: bold; color: #334155; margin: 20px 0 8px; }
+  h4 { font-size: 13px; font-weight: bold; color: #475569; margin: 14px 0 6px; }
+
+  p { margin-bottom: 10px; }
+  ul, ol { padding-left: 22px; margin-bottom: 10px; }
+  li { margin-bottom: 4px; }
+
+  .step { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 10px; }
+  .step-num { flex-shrink: 0; width: 24px; height: 24px; background: #2563eb; color: #fff;
+               border-radius: 50%; font-size: 12px; font-weight: bold;
+               display: flex; align-items: center; justify-content: center; }
+  .step-body { flex: 1; }
+
+  .tip { background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 6px;
+          padding: 10px 14px; margin: 12px 0; }
+  .tip::before { content: "💡 ヒント　"; font-weight: bold; color: #16a34a; }
+  .warn { background: #fff7ed; border: 1px solid #fed7aa; border-radius: 6px;
+           padding: 10px 14px; margin: 12px 0; }
+  .warn::before { content: "⚠️ 注意　"; font-weight: bold; color: #ea580c; }
+
+  table { width: 100%; border-collapse: collapse; margin: 12px 0 16px; font-size: 13px; }
+  th { background: #f1f5f9; font-weight: bold; padding: 8px 10px;
+       text-align: left; border: 1px solid #e2e8f0; }
+  td { padding: 7px 10px; border: 1px solid #e2e8f0; vertical-align: top; }
+  tr:nth-child(even) td { background: #f8fafc; }
+
+  kbd { background: #f1f5f9; border: 1px solid #cbd5e1; border-radius: 3px;
+        padding: 1px 6px; font-size: 12px; font-family: monospace; }
+
+  .badge { display: inline-block; background: #dbeafe; color: #1d4ed8;
+            border-radius: 4px; padding: 1px 7px; font-size: 11px; font-weight: bold; }
+  .badge-green { background: #dcfce7; color: #166534; }
+  .badge-orange { background: #ffedd5; color: #9a3412; }
+</style>
+</head>
+<body>
+
+<nav id="sidebar">
+  <h1>ユーザーマニュアル</h1>
+  <div class="section-title">はじめに</div>
+  <a href="#overview">システム概要</a>
+  <a href="#login">起動・ログイン</a>
+  <div class="section-title">名簿タブ</div>
+  <a href="#member-list">一覧・検索</a>
+  <a href="#member-new">新規登録</a>
+  <a href="#member-edit">情報の編集</a>
+  <a href="#member-withdraw">委託解除</a>
+  <a href="#member-import">Excelインポート</a>
+  <a href="#member-export">Excel出力</a>
+  <a href="#member-label">ラベル出力</a>
+  <a href="#member-email">メール送信</a>
+  <a href="#member-activity">対応履歴</a>
+  <div class="section-title">委託解除済みタブ</div>
+  <a href="#withdrawn">委託解除済み一覧</a>
+  <a href="#undo-withdraw">委託解除を取消</a>
+  <div class="section-title">便利な機能</div>
+  <a href="#notification">未読通知</a>
+  <a href="#backup">バックアップ・復元</a>
+  <a href="#column">列の表示設定</a>
+</nav>
+
+<main>
+  <div class="hero">
+    <h1>労働保険名簿管理システム　ユーザーマニュアル</h1>
+    <p>バージョン 1.1.0　／　2026年6月発行</p>
+  </div>
+
+  <!-- ========== 概要 ========== -->
+  <h2 id="overview">システム概要</h2>
+  <p>本システムは、労働保険事務組合の加入事業所を一元管理するためのデスクトップアプリケーションです。</p>
+  <table>
+    <tr><th>機能</th><th>概要</th></tr>
+    <tr><td>名簿管理</td><td>事業所の基本情報・保険番号・会員区分を管理</td></tr>
+    <tr><td>対応履歴</td><td>電話・訪問・書類送付などの対応内容を記録</td></tr>
+    <tr><td>変更履歴</td><td>情報変更のたびに自動記録（誰が・いつ・何を変更したか）</td></tr>
+    <tr><td>Excelインポート/出力</td><td>一括取込み・データ出力</td></tr>
+    <tr><td>ラベル出力</td><td>宛名シール用PDFを出力</td></tr>
+    <tr><td>メール送信</td><td>選択した事業所へMicrosoft 365経由でメール一括送信</td></tr>
+    <tr><td>バックアップ</td><td>起動時に自動バックアップ。手動復元にも対応</td></tr>
+  </table>
+
+  <!-- ========== ログイン ========== -->
+  <h2 id="login">起動・ログイン</h2>
+  <div class="step"><div class="step-num">1</div><div class="step-body">デスクトップの「労働保険名簿管理システム」アイコンをダブルクリックして起動します。</div></div>
+  <div class="step"><div class="step-num">2</div><div class="step-body">起動直後にログイン画面が表示されます。自分の名前を選択してください。</div></div>
+  <div class="step"><div class="step-num">3</div><div class="step-body">次回以降は前回のログイン名で自動ログインします。変更する場合は右上の「ログアウト」ボタンを押します。</div></div>
+  <div class="tip">起動時に自動バックアップが実行されます（1日1回）。バックアップは <code>backups/</code> フォルダに保存されます。</div>
+
+  <!-- ========== 名簿タブ ========== -->
+  <h2 id="member-list">名簿タブ — 一覧・検索</h2>
+  <p>画面上部の検索欄に入力すると、事業所名・フリガナ・住所・電話番号でリアルタイム絞り込みができます。</p>
+  <h3>列の操作</h3>
+  <ul>
+    <li>列ヘッダーをクリック → その列で昇順/降順ソート</li>
+    <li>列ヘッダーをドラッグ → 列の移動（設定は自動保存）</li>
+    <li>列の境界線をドラッグ → 列幅の調整（設定は自動保存）</li>
+    <li>列ヘッダーを右クリック → 表示する列の選択</li>
+  </ul>
+  <h3>行の選択</h3>
+  <ul>
+    <li>行をクリック → 1行選択（右パネルに対応履歴が表示されます）</li>
+    <li>左端のチェックボックス → 複数選択（ラベル出力・メール送信・Excel出力に使用）</li>
+    <li>ヘッダーのチェックボックス → 全件選択/解除</li>
+  </ul>
+
+  <h2 id="member-new">名簿タブ — 新規登録</h2>
+  <p>「新規登録」ボタンをクリックすると登録ダイアログが開きます。</p>
+  <table>
+    <tr><th>項目</th><th>説明</th></tr>
+    <tr><td>事業所名 <span class="badge badge-orange">必須</span></td><td>正式名称を入力してください</td></tr>
+    <tr><td>管理No.</td><td>事務組合内の管理番号（空白可）</td></tr>
+    <tr><td>会員No.</td><td>重複不可。重複時は保存できません</td></tr>
+    <tr><td>会 <span class="badge badge-green">○</span></td><td>会員の場合は「会員」チェックをON</td></tr>
+    <tr><td>電話番号</td><td>市外局番・局番・番号を別々に入力</td></tr>
+    <tr><td>FAX</td><td>市外局番・FAX番号を別々に入力</td></tr>
+    <tr><td>保険番号</td><td>0号〜6号の各保険番号を入力。特別加入・継続一括はチェックで設定</td></tr>
+  </table>
+  <div class="tip">変更理由の入力は省略できます。新規登録時は変更履歴が「新規登録」として自動記録されます。</div>
+
+  <h2 id="member-edit">名簿タブ — 情報の編集</h2>
+  <div class="step"><div class="step-num">1</div><div class="step-body">編集したい行をダブルクリックするか、行を選択して「編集」ボタンをクリックします。</div></div>
+  <div class="step"><div class="step-num">2</div><div class="step-body">内容を修正し「保存」ボタンを押します。</div></div>
+  <div class="step"><div class="step-num">3</div><div class="step-body">変更理由を入力すると変更履歴に記録されます（省略可）。</div></div>
+  <p>変更履歴は、行を右クリック →「変更履歴を見る」から確認できます。</p>
+
+  <h2 id="member-withdraw">名簿タブ — 委託解除</h2>
+  <div class="warn">委託解除は慎重に行ってください。操作後は委託解除済みタブから「委託解除を取消」で名簿に戻すことができます。</div>
+  <div class="step"><div class="step-num">1</div><div class="step-body">対象の行を選択します。</div></div>
+  <div class="step"><div class="step-num">2</div><div class="step-body">「委託解除」ボタンをクリックします。</div></div>
+  <div class="step"><div class="step-num">3</div><div class="step-body">解除日・解除理由を入力し「委託解除を実行」ボタンを押します。事業所名が確認ダイアログに表示されます。</div></div>
+
+  <h2 id="member-import">名簿タブ — Excelインポート</h2>
+  <p>メニューバー「ファイル」→「Excelインポート」から実行します。</p>
+  <ul>
+    <li>「既存の会員番号を上書きする」チェックを入れると、管理No.が一致する既存レコードを更新します。</li>
+    <li>チェックなしの場合、既存レコードはスキップされます（スキップ理由はインポート完了時に表示）。</li>
+    <li>事業所名が空欄の行は自動でスキップされます。</li>
+  </ul>
+  <div class="tip">インポート用テンプレートは事務局から入手してください。列順が異なる場合はインポートできません。</div>
+
+  <h2 id="member-export">名簿タブ — Excel出力</h2>
+  <p>メニューバー「ファイル」→「Excel出力」から実行します。チェックボックスで選択した会員のみ出力します（未選択の場合は全件出力）。</p>
+
+  <h2 id="member-label">名簿タブ — ラベル出力</h2>
+  <div class="step"><div class="step-num">1</div><div class="step-body">左端のチェックボックスで宛先を選択します。</div></div>
+  <div class="step"><div class="step-num">2</div><div class="step-body">「ラベル出力」ボタンをクリックします。</div></div>
+  <div class="step"><div class="step-num">3</div><div class="step-body">宛先設定（事務所宛・郵送先宛）を確認してPDF出力ボタンを押します。</div></div>
+  <div class="tip">郵送先住所が登録されている場合、「郵送先優先」オプションで郵送先に切り替えられます。</div>
+
+  <h2 id="member-email">名簿タブ — メール送信</h2>
+  <div class="step"><div class="step-num">1</div><div class="step-body">送信対象を左端のチェックボックスで選択します。</div></div>
+  <div class="step"><div class="step-num">2</div><div class="step-body">「メール送信」ボタンをクリックします。</div></div>
+  <div class="step"><div class="step-num">3</div><div class="step-body">メール作成ダイアログが開きます。テンプレートを選択するか、件名・本文を手入力します。</div></div>
+  <div class="step"><div class="step-num">4</div><div class="step-body">「プレビュー」ボタンで1件目の内容を確認後、「送信実行」ボタンを押します。</div></div>
+  <table>
+    <tr><th>プレースホルダー</th><th>置換内容</th></tr>
+    <tr><td><kbd>{事業所名}</kbd></td><td>事業所名</td></tr>
+    <tr><td><kbd>{代表者名}</kbd></td><td>代表者名</td></tr>
+    <tr><td><kbd>{所属・役職}</kbd></td><td>所属・役職</td></tr>
+    <tr><td><kbd>{会員No.}</kbd></td><td>会員No.</td></tr>
+  </table>
+  <div class="warn">初回送信時はMicrosoft 365のサインインが必要です。表示されるコードをブラウザで入力してください。</div>
+
+  <h2 id="member-activity">名簿タブ — 対応履歴</h2>
+  <h3>記録する</h3>
+  <div class="step"><div class="step-num">1</div><div class="step-body">名簿で行を選択すると右パネルに対応履歴が表示されます。</div></div>
+  <div class="step"><div class="step-num">2</div><div class="step-body">「対応履歴を追加」ボタンをクリックします。</div></div>
+  <div class="step"><div class="step-num">3</div><div class="step-body">カテゴリを選択し、内容を入力して「追加」ボタンを押します。</div></div>
+  <h3>確認する</h3>
+  <p>行を右クリック →「対応履歴を見る」で全履歴をダイアログで確認できます。</p>
+  <h3>他の職員の対応を確認する（通知）</h3>
+  <p>他の職員が入力した対応履歴は、起動時に通知ポップアップで表示されます（→ <a href="#notification">未読通知</a>）。</p>
+
+  <!-- ========== 委託解除済みタブ ========== -->
+  <h2 id="withdrawn">委託解除済みタブ</h2>
+  <p>委託解除された事業所の一覧です。名簿タブと同様に検索・ラベル出力・メール送信ができます。</p>
+
+  <h2 id="undo-withdraw">委託解除を取消</h2>
+  <div class="step"><div class="step-num">1</div><div class="step-body">委託解除済みタブで対象の行を選択します。</div></div>
+  <div class="step"><div class="step-num">2</div><div class="step-body">「委託解除を取消」ボタンをクリックします。</div></div>
+  <div class="step"><div class="step-num">3</div><div class="step-body">確認ダイアログで事業所名を確認し「OK」を押します。名簿タブに戻ります。</div></div>
+  <div class="tip">変更履歴に「委託解除を取消」として記録されます。</div>
+
+  <!-- ========== 通知 ========== -->
+  <h2 id="notification">未読通知</h2>
+  <p>起動時に、他の職員が入力した対応履歴・情報変更が未読の場合、通知ポップアップが表示されます。</p>
+  <ul>
+    <li>行をダブルクリック → 対象会員の対応履歴ダイアログを表示（ダイアログは閉じません）</li>
+    <li>右端のチェックボックスをON → その通知を既読にして一覧から消えます</li>
+    <li>「すべて既読にする」ボタン → 全件既読にしてダイアログを閉じます</li>
+  </ul>
+
+  <!-- ========== バックアップ ========== -->
+  <h2 id="backup">バックアップ・復元</h2>
+  <h3>自動バックアップ</h3>
+  <p>毎日初回起動時に前日のバックアップが自動作成されます。保存場所は <code>backups/</code> フォルダです。</p>
+  <table>
+    <tr><th>期間</th><th>保持頻度</th></tr>
+    <tr><td>直近7日</td><td>毎日</td></tr>
+    <tr><td>8〜31日前</td><td>週1件（各週で最新1件）</td></tr>
+    <tr><td>32〜90日前</td><td>月1件（各月で最新1件）</td></tr>
+    <tr><td>90日超</td><td>自動削除</td></tr>
+  </table>
+  <h3>バックアップから復元する</h3>
+  <div class="warn">復元するとその時点のデータに上書きされます。現在のデータは自動でスナップショットとして保存されます。復元後はアプリが終了するので、再起動してご利用ください。</div>
+  <div class="step"><div class="step-num">1</div><div class="step-body">メニューバー「ファイル」→「バックアップから復元」をクリックします。</div></div>
+  <div class="step"><div class="step-num">2</div><div class="step-body">復元したい日付の「復元」ボタンをクリックします。</div></div>
+  <div class="step"><div class="step-num">3</div><div class="step-body">確認ダイアログで「OK」を押すと復元が実行されます。</div></div>
+
+  <!-- ========== 列設定 ========== -->
+  <h2 id="column">列の表示設定</h2>
+  <p>「表示列選択」ボタンまたは列ヘッダーの右クリックから、表示する列を選択できます。設定はログイン名ごとに自動保存されます。</p>
+  <div class="tip">列の順序や幅も自動保存されます。再起動後も設定が維持されます。</div>
+
+  <p style="margin-top:40px; color:#888; font-size:12px; border-top:1px solid #e2e8f0; padding-top:12px;">
+    労働保険名簿管理システム v1.1.0　ユーザーマニュアル
+  </p>
+</main>
+
+</body>
+</html>
