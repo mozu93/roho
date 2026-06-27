@@ -35,9 +35,6 @@ jobs:
           $version = $env:REF_NAME.TrimStart('v')
           "VERSION=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
 
-      - name: Generate icon
-        run: python generate_icon.py
-
       - name: Build with PyInstaller
         run: pyinstaller rouho.spec --clean
 
