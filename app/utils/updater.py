@@ -80,18 +80,33 @@ def download_installer(url: str, dest_path: str, progress_cb=None) -> str:
 
 def launch_installer(path: str) -> None:
     # NamedTemporaryFile で一意パスを生成（固定名ファイルへのシンボリックリンク攻撃対策）
-    # /CLOSEAPPLICATIONS: ファイルロック中のプロセスをインストーラー側が自動終了
+    # Rouho.exe が完全に消えるまでポーリングしてからインストーラーを起動する。
+    # /RESTARTAPPLICATIONS は省略: 再起動した新インスタンスがファイルをロックして
+    # インストーラーと競合するため使用しない。
     with tempfile.NamedTemporaryFile(
         mode="w", suffix=".bat", delete=False, dir=tempfile.gettempdir()
     ) as f:
         bat = f.name
         f.write(
-            f'@echo off\n'
-            f'taskkill /F /IM Rouho.exe /T >nul 2>&1\n'
-            f'timeout /t 2 /nobreak >nul\n'
-            f'"{path}" /SILENT /CLOSEAPPLICATIONS /RESTARTAPPLICATIONS\n'
+            '@echo off\n'
+            'taskkill /F /IM Rouho.exe /T >nul 2>&1\n'
+            ':wait_loop\n'
+            'tasklist /FI "IMAGENAME eq Rouho.exe" 2>nul | find /I "Rouho.exe" >nul\n'
+            'if not errorlevel 1 (\n'
+            '    timeout /t 1 /nobreak >nul\n'
+            '    goto wait_loop\n'
+            ')\n'
+            'timeout /t 1 /nobreak >nul\n'
+            f'"{path}" /SILENT /CLOSEAPPLICATIONS\n'
         )
-    subprocess.Popen(["cmd", "/c", bat], creationflags=subprocess.CREATE_NO_WINDOW)
+    # DETACHED_PROCESS: 親プロセス(Rouho)終了後もバッチが確実に生き残るよう独立させる
+    subprocess.Popen(
+        ["cmd", "/c", bat],
+        creationflags=subprocess.DETACHED_PROCESS | subprocess.CREATE_NO_WINDOW,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
 
 
 class UpdateChecker(QThread):
