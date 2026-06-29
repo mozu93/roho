@@ -375,6 +375,16 @@ class EmailTab(QWidget):
         self._worker.error.connect(lambda msg: QMessageBox.critical(self, "送信エラー", msg))
         self._worker.start()
 
+    def stop_threads(self) -> None:
+        """アプリ終了時にバックグラウンドスレッドを安全に停止する。"""
+        for attr in ("_auth_worker", "_worker"):
+            thread = getattr(self, attr, None)
+            if thread is not None and thread.isRunning():
+                thread.quit()
+                if not thread.wait(3000):
+                    thread.terminate()
+                    thread.wait(1000)
+
     def _on_send_finished(self, result: dict):
         self._progress_bar.hide()
         QMessageBox.information(

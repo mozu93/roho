@@ -104,6 +104,10 @@ class DownloadThread(QThread):
         super().__init__(parent)
         self._url = url
         self._dest_path = dest_path
+        self._cancelled = False
+
+    def cancel(self) -> None:
+        self._cancelled = True
 
     def run(self):
         try:
@@ -113,14 +117,18 @@ class DownloadThread(QThread):
             downloaded = 0
             with open(self._dest_path, "wb") as f:
                 for chunk in resp.iter_content(chunk_size=8192):
+                    if self._cancelled:
+                        return
                     if chunk:
                         f.write(chunk)
                         downloaded += len(chunk)
                         if total:
                             self.progress.emit(downloaded, total)
-            self.finished.emit(self._dest_path)
+            if not self._cancelled:
+                self.finished.emit(self._dest_path)
         except Exception as e:
-            self.failed.emit(str(e))
+            if not self._cancelled:
+                self.failed.emit(str(e))
 
 
 class UpdateChecker(QThread):

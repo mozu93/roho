@@ -217,6 +217,14 @@ class MainWindow(QMainWindow):
         self.setGeometry(x, y, w, h)
 
     def closeEvent(self, event):
+        # 再入防止: Qt が複数回 closeEvent を発行する場合に備える
+        if getattr(self, "_closing", False):
+            event.accept()
+            return
+        self._closing = True
+        event.accept()
+
+        # ウィンドウ位置を保存
         try:
             geo = self.geometry()
             self._config.window_geometry = {
@@ -226,11 +234,46 @@ class MainWindow(QMainWindow):
             self._config.save(self._config_path)
         except Exception:
             pass
-        event.accept()
-        import ctypes as _ctypes
-        _ctypes.windll.kernel32.TerminateProcess(
-            _ctypes.windll.kernel32.GetCurrentProcess(), 0
-        )
+
+        # バックグラウンドスレッドを順次停止
+        # (QThread デストラクタが実行中スレッドを待ち続けるのを防ぐ)
+        for widget_attr in ("_update_banner", "_settings_tab"):
+            widget = getattr(self, widget_attr, None)
+            if widget and hasattr(widget, "stop_threads"):
+                try:
+                    widget.stop_threads()
+                except Exception:
+                    pass
+
+        # タブ内のスレッドも停止
+        tabs = getattr(self, "_tabs", None)
+        if tabs:
+            for i in range(tabs.count()):
+                w = tabs.widget(i)
+                if w and hasattr(w, "stop_threads"):
+                    try:
+                        w.stop_threads()
+                    except Exception:
+                        pass
+
+        # SQLAlchemy 接続プールを解放 (WAL ファイルの適切な後処理)
+        try:
+            if self._engine:
+                self._engine.dispose()
+        except Exception:
+            pass
+
+        # プロセスを強制終了
+        # TerminateProcess は ExitProcess と違い DLL ローダーロックの影響を受けず
+        # ブロッキング中のスレッドがあっても即時終了できる
+        import sys as _sys
+        import os as _os
+        if _sys.platform == "win32":
+            import ctypes as _ctypes
+            _ctypes.windll.kernel32.TerminateProcess(
+                _ctypes.windll.kernel32.GetCurrentProcess(), 0
+            )
+        _os._exit(0)
 
     def _on_logout(self):
         self._config.last_staff_name = ""

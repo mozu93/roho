@@ -369,15 +369,30 @@ class SettingsTab(QWidget):
         if reply == QMessageBox.StandardButton.Yes:
             self._restart_app()
 
+    def stop_threads(self) -> None:
+        """アプリ終了時にバックグラウンドスレッドを安全に停止する。"""
+        thread = getattr(self, "_auth_worker", None)
+        if thread is not None and thread.isRunning():
+            thread.quit()
+            if not thread.wait(3000):
+                thread.terminate()
+                thread.wait(1000)
+
     @staticmethod
     def _restart_app():
         import sys
+        import os as _os
         import subprocess
-        from PyQt6.QtWidgets import QApplication
         exe = sys.executable
         args = [] if getattr(sys, "frozen", False) else sys.argv
         subprocess.Popen([exe] + args)
-        QApplication.quit()
+        # QApplication.quit() ではなく強制終了: Qt デストラクタのスレッド待機を回避する
+        if sys.platform == "win32":
+            import ctypes as _ctypes
+            _ctypes.windll.kernel32.TerminateProcess(
+                _ctypes.windll.kernel32.GetCurrentProcess(), 0
+            )
+        _os._exit(0)
 
     # ── M365設定・認証 ──
 
