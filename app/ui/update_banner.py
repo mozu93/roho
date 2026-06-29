@@ -113,7 +113,16 @@ class UpdateBanner(QWidget):
         if reply != QMessageBox.StandardButton.Yes:
             return
         if getattr(sys, "frozen", False):
-            launch_installer(self._installer_path)
+            try:
+                launch_installer(self._installer_path)
+            except Exception as e:
+                QMessageBox.critical(
+                    self, "インストーラー起動エラー",
+                    "インストーラーを自動起動できませんでした。\n"
+                    "手動でインストーラーを実行してください:\n\n"
+                    f"{self._installer_path}\n\nエラー: {e}",
+                )
+                return
             # os._exit でクリーンアップをスキップし即座にプロセスを終了
             # （sys.exit だと Qt/Python の後処理中に DLL ロックが残る）
             os._exit(0)

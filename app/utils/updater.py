@@ -100,13 +100,25 @@ def launch_installer(path: str) -> None:
             f'"{path}" /SILENT /CLOSEAPPLICATIONS\n'
         )
     # DETACHED_PROCESS: 親プロセス(Rouho)終了後もバッチが確実に生き残るよう独立させる
-    subprocess.Popen(
-        ["cmd", "/c", bat],
-        creationflags=subprocess.DETACHED_PROCESS | subprocess.CREATE_NO_WINDOW,
-        stdin=subprocess.DEVNULL,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-    )
+    # CREATE_BREAKAWAY_FROM_JOB: PyInstaller の Job Object に引き継がれないよう試みる
+    _CREATE_BREAKAWAY_FROM_JOB = 0x01000000
+    flags = subprocess.DETACHED_PROCESS | subprocess.CREATE_NO_WINDOW
+    try:
+        subprocess.Popen(
+            ["cmd", "/c", bat],
+            creationflags=flags | _CREATE_BREAKAWAY_FROM_JOB,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+    except OSError:
+        subprocess.Popen(
+            ["cmd", "/c", bat],
+            creationflags=flags,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
 
 
 class UpdateChecker(QThread):
