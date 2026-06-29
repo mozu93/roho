@@ -159,7 +159,6 @@ class UpdateBanner(QWidget):
                 f"{self._installer_path}\n\nエラー: {e}",
             )
             return
-        import ctypes as _ctypes
-        _ctypes.windll.kernel32.TerminateProcess(
-            _ctypes.windll.kernel32.GetCurrentProcess(), 0
-        )
+        # closeEvent 経由で終了する（closeEvent 内の TerminateProcess + os._exit が確実）
+        from PyQt6.QtCore import QTimer
+        QTimer.singleShot(0, self.window().close)
