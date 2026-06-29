@@ -91,12 +91,14 @@ def main():
     font.setPointSize(11)
     app.setFont(font)
     app.setStyleSheet(_APP_STYLE)
+    code = 0
     try:
         window = MainWindow(CONFIG_PATH)
         window.show()
-        sys.exit(app.exec())
+        code = app.exec()
     except SystemExit as e:
-        sys.exit(int(str(e)))
+        code = int(str(e))
+    os._exit(code)
 
 
 if __name__ == "__main__":

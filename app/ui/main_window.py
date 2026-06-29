@@ -217,22 +217,23 @@ class MainWindow(QMainWindow):
         self.setGeometry(x, y, w, h)
 
     def closeEvent(self, event):
-        geo = self.geometry()
-        self._config.window_geometry = {
-            "x": geo.x(), "y": geo.y(),
-            "w": geo.width(), "h": geo.height(),
-        }
-        self._config.save(self._config_path)
-        # バックグラウンドスレッドを停止してからプロセスを終了
-        banner = getattr(self, "_update_banner", None)
-        if banner:
-            checker = getattr(banner, "_checker", None)
-            if checker and checker.isRunning():
-                checker.quit()
-                checker.wait(2000)
-        import os
-        event.accept()
-        os._exit(0)
+        try:
+            geo = self.geometry()
+            self._config.window_geometry = {
+                "x": geo.x(), "y": geo.y(),
+                "w": geo.width(), "h": geo.height(),
+            }
+            self._config.save(self._config_path)
+            if self._engine:
+                self._engine.dispose()
+        except Exception:
+            pass
+        finally:
+            event.accept()
+            import ctypes
+            ctypes.windll.kernel32.TerminateProcess(
+                ctypes.windll.kernel32.GetCurrentProcess(), 0
+            )
 
     def _on_logout(self):
         self._config.last_staff_name = ""
