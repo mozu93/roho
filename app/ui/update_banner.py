@@ -104,6 +104,7 @@ class UpdateBanner(QWidget):
 
     def _do_install(self):
         import sys
+        import os
         reply = QMessageBox.question(
             self, "更新確認",
             "インストーラーを起動してアプリを終了します。よいですか？",
@@ -113,7 +114,9 @@ class UpdateBanner(QWidget):
             return
         if getattr(sys, "frozen", False):
             launch_installer(self._installer_path)
-            sys.exit(0)
+            # os._exit でクリーンアップをスキップし即座にプロセスを終了
+            # （sys.exit だと Qt/Python の後処理中に DLL ロックが残る）
+            os._exit(0)
         else:
             QMessageBox.information(
                 self, "開発環境",

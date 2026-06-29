@@ -87,7 +87,8 @@ def launch_installer(path: str) -> None:
         bat = f.name
         f.write(
             f'@echo off\n'
-            f'timeout /t 8 /nobreak >nul\n'
+            f'taskkill /F /IM Rouho.exe /T >nul 2>&1\n'
+            f'timeout /t 2 /nobreak >nul\n'
             f'"{path}" /SILENT /CLOSEAPPLICATIONS /RESTARTAPPLICATIONS\n'
         )
     subprocess.Popen(["cmd", "/c", bat], creationflags=subprocess.CREATE_NO_WINDOW)
