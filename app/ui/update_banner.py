@@ -3,8 +3,7 @@ import tempfile
 from PyQt6.QtWidgets import (
     QWidget, QHBoxLayout, QLabel, QPushButton, QProgressBar, QMessageBox,
 )
-from PyQt6.QtCore import Qt
-from app.utils.updater import UpdateChecker, download_installer, launch_installer, verify_installer
+from app.utils.updater import UpdateChecker, DownloadThread, launch_installer, verify_installer
 
 
 class UpdateBanner(QWidget):
@@ -68,39 +67,45 @@ class UpdateBanner(QWidget):
             tempfile.gettempdir(),
             f"Rouho_Setup_{self._update_info['version']}.exe"
         )
-        try:
-            download_installer(
-                self._update_info["download_url"],
-                dest,
-                progress_cb=lambda c, t: self._progress_bar.setValue(int(c / t * 100)),
-            )
-            self._progress_bar.hide()
-            checksum_url = self._update_info.get("checksum_url", "")
-            if checksum_url:
-                if not verify_installer(dest, checksum_url):
-                    QMessageBox.critical(
-                        self, "セキュリティエラー",
-                        "ダウンロードファイルのチェックサムが一致しません。\nインストールを中止しました。",
-                    )
-                    self._action_btn.setEnabled(True)
-                    return
-            else:
-                ret = QMessageBox.warning(
-                    self, "チェックサム未確認",
-                    "このリリースにはチェックサムファイルがありません。\n"
-                    "信頼できるソースからダウンロードされた場合のみ続行してください。\n\n続行しますか？",
-                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+        self._download_thread = DownloadThread(
+            self._update_info["download_url"], dest, parent=self
+        )
+        self._download_thread.progress.connect(
+            lambda c, t: self._progress_bar.setValue(int(c / t * 100))
+        )
+        self._download_thread.finished.connect(self._on_download_finished)
+        self._download_thread.failed.connect(self._on_download_failed)
+        self._download_thread.start()
+
+    def _on_download_finished(self, dest: str):
+        self._progress_bar.hide()
+        checksum_url = self._update_info.get("checksum_url", "")
+        if checksum_url:
+            if not verify_installer(dest, checksum_url):
+                QMessageBox.critical(
+                    self, "セキュリティエラー",
+                    "ダウンロードファイルのチェックサムが一致しません。\nインストールを中止しました。",
                 )
-                if ret != QMessageBox.StandardButton.Yes:
-                    self._action_btn.setEnabled(True)
-                    return
-            self._installer_path = dest
-            self._action_btn.setText("今すぐ更新して再起動")
-            self._action_btn.setEnabled(True)
-        except Exception:
-            self._progress_bar.hide()
-            self._action_btn.setEnabled(True)
-            self._message_label.setText("ダウンロードに失敗しました。後で再試行してください。")
+                self._action_btn.setEnabled(True)
+                return
+        else:
+            ret = QMessageBox.warning(
+                self, "チェックサム未確認",
+                "このリリースにはチェックサムファイルがありません。\n"
+                "信頼できるソースからダウンロードされた場合のみ続行してください。\n\n続行しますか？",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            )
+            if ret != QMessageBox.StandardButton.Yes:
+                self._action_btn.setEnabled(True)
+                return
+        self._installer_path = dest
+        self._action_btn.setText("今すぐ更新して再起動")
+        self._action_btn.setEnabled(True)
+
+    def _on_download_failed(self, _error: str):
+        self._progress_bar.hide()
+        self._action_btn.setEnabled(True)
+        self._message_label.setText("ダウンロードに失敗しました。後で再試行してください。")
 
     def _do_install(self):
         import sys

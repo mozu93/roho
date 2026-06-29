@@ -1,9 +1,24 @@
 import sys
 import os
-from PyQt6.QtWidgets import QApplication
+import ctypes
+from PyQt6.QtWidgets import QApplication, QMessageBox
 from app.ui.main_window import MainWindow
 
 CONFIG_PATH = os.path.join(os.path.dirname(__file__), "app_config.json")
+
+_MUTEX_NAME = "Global\\RouhoAppSingleInstance"
+_MUTEX_HANDLE = None
+
+
+def _acquire_single_instance() -> bool:
+    """Windows名前付きMutexで二重起動を防ぐ。既に起動中の場合Falseを返す。"""
+    global _MUTEX_HANDLE
+    _MUTEX_HANDLE = ctypes.windll.kernel32.CreateMutexW(None, True, _MUTEX_NAME)
+    if ctypes.windll.kernel32.GetLastError() == 183:  # ERROR_ALREADY_EXISTS
+        ctypes.windll.kernel32.CloseHandle(_MUTEX_HANDLE)
+        _MUTEX_HANDLE = None
+        return False
+    return True
 
 
 _APP_STYLE = """
@@ -85,6 +100,14 @@ QTableWidget QHeaderView::section:first {
 
 
 def main():
+    if not _acquire_single_instance():
+        app = QApplication(sys.argv)
+        QMessageBox.warning(
+            None, "起動エラー",
+            "労働保険名簿管理システムはすでに起動しています。\n"
+            "タスクバーまたはタスクマネージャーで確認してください。"
+        )
+        sys.exit(0)
     app = QApplication(sys.argv)
     app.setApplicationName("労働保険名簿管理システム")
     font = app.font()

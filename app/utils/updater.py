@@ -1,7 +1,5 @@
 import hashlib
 import os
-import subprocess
-import tempfile
 import requests
 from packaging.version import Version
 from PyQt6.QtCore import QThread, pyqtSignal
@@ -63,62 +61,48 @@ def verify_installer(path: str, checksum_url: str, timeout: int = 30) -> bool:
         return False
 
 
-def download_installer(url: str, dest_path: str, progress_cb=None) -> str:
-    resp = requests.get(url, stream=True, timeout=120)
-    resp.raise_for_status()
-    total = int(resp.headers.get("content-length", 0))
-    downloaded = 0
-    with open(dest_path, "wb") as f:
-        for chunk in resp.iter_content(chunk_size=8192):
-            if chunk:
-                f.write(chunk)
-                downloaded += len(chunk)
-                if progress_cb and total:
-                    progress_cb(downloaded, total)
-    return dest_path
-
 
 def launch_installer(path: str) -> None:
-    # NamedTemporaryFile で一意パスを生成（固定名ファイルへのシンボリックリンク攻撃対策）
-    # Rouho.exe が完全に消えるまでポーリングしてからインストーラーを起動する。
-    # /RESTARTAPPLICATIONS は省略: 再起動した新インスタンスがファイルをロックして
-    # インストーラーと競合するため使用しない。
-    with tempfile.NamedTemporaryFile(
-        mode="w", suffix=".bat", delete=False, dir=tempfile.gettempdir()
-    ) as f:
-        bat = f.name
-        f.write(
-            '@echo off\n'
-            'taskkill /F /IM Rouho.exe /T >nul 2>&1\n'
-            ':wait_loop\n'
-            'tasklist /FI "IMAGENAME eq Rouho.exe" 2>nul | find /I "Rouho.exe" >nul\n'
-            'if not errorlevel 1 (\n'
-            '    timeout /t 1 /nobreak >nul\n'
-            '    goto wait_loop\n'
-            ')\n'
-            'timeout /t 1 /nobreak >nul\n'
-            f'"{path}" /SILENT /CLOSEAPPLICATIONS\n'
-        )
-    # DETACHED_PROCESS: 親プロセス(Rouho)終了後もバッチが確実に生き残るよう独立させる
-    # CREATE_BREAKAWAY_FROM_JOB: PyInstaller の Job Object に引き継がれないよう試みる
-    _CREATE_BREAKAWAY_FROM_JOB = 0x01000000
-    flags = subprocess.DETACHED_PROCESS | subprocess.CREATE_NO_WINDOW
-    try:
-        subprocess.Popen(
-            ["cmd", "/c", bat],
-            creationflags=flags | _CREATE_BREAKAWAY_FROM_JOB,
-            stdin=subprocess.DEVNULL,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
-    except OSError:
-        subprocess.Popen(
-            ["cmd", "/c", bat],
-            creationflags=flags,
-            stdin=subprocess.DEVNULL,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-        )
+    """ShellExecuteW でインストーラーを起動する。
+    batファイル経由のアプローチは PyInstaller の Job Object に含まれた子プロセスが
+    TerminateProcess で道連れになる問題があるため、Shell API を使用する。
+    ShellExecuteW は Job Object を継承しないプロセスを生成する。
+    /CLOSEAPPLICATIONS: Inno Setup が実行中の Rouho.exe を自動終了する。
+    """
+    import ctypes
+    ret = ctypes.windll.shell32.ShellExecuteW(
+        None, "open", path, "/SILENT /CLOSEAPPLICATIONS", None, 1
+    )
+    if ret <= 32:
+        raise OSError(f"インストーラーの起動に失敗しました (ShellExecute code={ret})")
+
+
+class DownloadThread(QThread):
+    progress = pyqtSignal(int, int)  # downloaded, total
+    finished = pyqtSignal(str)       # dest_path
+    failed = pyqtSignal(str)         # error message
+
+    def __init__(self, url: str, dest_path: str, parent=None):
+        super().__init__(parent)
+        self._url = url
+        self._dest_path = dest_path
+
+    def run(self):
+        try:
+            resp = requests.get(self._url, stream=True, timeout=120)
+            resp.raise_for_status()
+            total = int(resp.headers.get("content-length", 0))
+            downloaded = 0
+            with open(self._dest_path, "wb") as f:
+                for chunk in resp.iter_content(chunk_size=8192):
+                    if chunk:
+                        f.write(chunk)
+                        downloaded += len(chunk)
+                        if total:
+                            self.progress.emit(downloaded, total)
+            self.finished.emit(self._dest_path)
+        except Exception as e:
+            self.failed.emit(str(e))
 
 
 class UpdateChecker(QThread):
