@@ -36,5 +36,17 @@ Source: "..\dist\Rouho\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs
 Name: "{userprograms}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
 Name: "{userdesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
 
+[Code]
+function InitializeSetup(): Boolean;
+var
+  ResultCode: Integer;
+begin
+  // 起動中の場合は強制終了してからインストール開始
+  Exec(ExpandConstant('{sys}\taskkill.exe'), '/F /IM Rouho.exe /T', '',
+       SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  Sleep(2000);
+  Result := True;
+end;
+
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Flags: nowait runascurrentuser
