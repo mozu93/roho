@@ -117,7 +117,6 @@ class UpdateBanner(QWidget):
 
     def _do_install(self):
         import sys
-        import ctypes
         reply = QMessageBox.question(
             self, "更新確認",
             "インストーラーを起動してアプリを終了します。よいですか？",
@@ -136,9 +135,7 @@ class UpdateBanner(QWidget):
                     f"{self._installer_path}\n\nエラー: {e}",
                 )
                 return
-            ctypes.windll.kernel32.TerminateProcess(
-                ctypes.windll.kernel32.GetCurrentProcess(), 0
-            )
+            os._exit(0)
         else:
             QMessageBox.information(
                 self, "開発環境",
