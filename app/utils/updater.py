@@ -81,6 +81,7 @@ def launch_installer(path: str) -> None:
         "while (Get-Process -Id $p -ErrorAction SilentlyContinue) {",
         "    Start-Sleep -Milliseconds 300",
         "}",
+        f"Unblock-File -Path '{escaped_path}' -ErrorAction SilentlyContinue",
         f"Start-Process -FilePath '{escaped_path}' -ArgumentList '/SILENT', '/NOCLOSEAPPLICATIONS' -Verb RunAs",
     ]
     encoded = base64.b64encode(

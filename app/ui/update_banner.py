@@ -142,7 +142,6 @@ class UpdateBanner(QWidget):
                 checker.wait(1000)
 
     def _do_install(self):
-        import sys
         reply = QMessageBox.question(
             self, "更新確認",
             "インストーラーを起動してアプリを終了します。よいですか？",
@@ -150,23 +149,17 @@ class UpdateBanner(QWidget):
         )
         if reply != QMessageBox.StandardButton.Yes:
             return
-        if getattr(sys, "frozen", False):
-            try:
-                launch_installer(self._installer_path)
-            except Exception as e:
-                QMessageBox.critical(
-                    self, "インストーラー起動エラー",
-                    "インストーラーを自動起動できませんでした。\n"
-                    "手動でインストーラーを実行してください:\n\n"
-                    f"{self._installer_path}\n\nエラー: {e}",
-                )
-                return
-            import ctypes as _ctypes
-            _ctypes.windll.kernel32.TerminateProcess(
-                _ctypes.windll.kernel32.GetCurrentProcess(), 0
+        try:
+            launch_installer(self._installer_path)
+        except Exception as e:
+            QMessageBox.critical(
+                self, "インストーラー起動エラー",
+                "インストーラーを自動起動できませんでした。\n"
+                "手動でインストーラーを実行してください:\n\n"
+                f"{self._installer_path}\n\nエラー: {e}",
             )
-        else:
-            QMessageBox.information(
-                self, "開発環境",
-                f"インストーラーのパス:\n{self._installer_path}"
-            )
+            return
+        import ctypes as _ctypes
+        _ctypes.windll.kernel32.TerminateProcess(
+            _ctypes.windll.kernel32.GetCurrentProcess(), 0
+        )
