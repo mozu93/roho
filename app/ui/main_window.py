@@ -224,16 +224,11 @@ class MainWindow(QMainWindow):
                 "w": geo.width(), "h": geo.height(),
             }
             self._config.save(self._config_path)
-            if self._engine:
-                self._engine.dispose()
         except Exception:
             pass
-        finally:
-            event.accept()
-            import ctypes
-            ctypes.windll.kernel32.TerminateProcess(
-                ctypes.windll.kernel32.GetCurrentProcess(), 0
-            )
+        event.accept()
+        import os as _os
+        _os._exit(0)
 
     def _on_logout(self):
         self._config.last_staff_name = ""

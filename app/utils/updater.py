@@ -63,18 +63,36 @@ def verify_installer(path: str, checksum_url: str, timeout: int = 30) -> bool:
 
 
 def launch_installer(path: str) -> None:
-    """ShellExecuteW でインストーラーを起動する。
-    batファイル経由のアプローチは PyInstaller の Job Object に含まれた子プロセスが
-    TerminateProcess で道連れになる問題があるため、Shell API を使用する。
-    ShellExecuteW は Job Object を継承しないプロセスを生成する。
-    /CLOSEAPPLICATIONS: Inno Setup が実行中の Rouho.exe を自動終了する。
+    """ShellExecuteW で PowerShell ヘルパーを起動し、本プロセス終了後にインストーラーを実行する。
+    /CLOSEAPPLICATIONS をインストーラー側で使うと TerminateProcess との競合が発生し
+    「アプリを自動終了できない」エラーになるため、本プロセスの PID が完全に消えてから
+    インストーラーを起動する方式に変更。
+    PowerShell は ShellExecuteW 経由で起動するため PyInstaller の Job Object 外となり、
+    TerminateProcess で道連れにならない。
     """
+    import base64
     import ctypes
+    import os
+
+    my_pid = os.getpid()
+    escaped_path = path.replace("'", "''")
+    ps_lines = [
+        f"$p = {my_pid}",
+        "while (Get-Process -Id $p -ErrorAction SilentlyContinue) {",
+        "    Start-Sleep -Milliseconds 300",
+        "}",
+        f"Start-Process -FilePath '{escaped_path}' -ArgumentList '/SILENT', '/NOCLOSEAPPLICATIONS'",
+    ]
+    encoded = base64.b64encode(
+        "\r\n".join(ps_lines).encode("utf-16-le")
+    ).decode("ascii")
     ret = ctypes.windll.shell32.ShellExecuteW(
-        None, "open", path, "/SILENT /CLOSEAPPLICATIONS", None, 1
+        None, "open", "powershell.exe",
+        f"-WindowStyle Hidden -NonInteractive -EncodedCommand {encoded}",
+        None, 0,  # SW_HIDE
     )
     if ret <= 32:
-        raise OSError(f"インストーラーの起動に失敗しました (ShellExecute code={ret})")
+        raise OSError(f"アップデートヘルパーの起動に失敗しました (ShellExecute code={ret})")
 
 
 class DownloadThread(QThread):

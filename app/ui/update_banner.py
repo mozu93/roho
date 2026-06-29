@@ -107,6 +107,14 @@ class UpdateBanner(QWidget):
         self._action_btn.setEnabled(True)
         self._message_label.setText("ダウンロードに失敗しました。後で再試行してください。")
 
+    def stop_threads(self):
+        """アプリ終了時にバックグラウンドスレッドへ終了シグナルを送る。
+        os._exit(0) がプロセスごと即時終了するので wait() は不要。"""
+        for attr in ("_checker", "_download_thread"):
+            thread = getattr(self, attr, None)
+            if thread is not None and thread.isRunning():
+                thread.quit()
+
     def _do_install(self):
         import sys
         import ctypes
