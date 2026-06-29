@@ -81,7 +81,7 @@ def launch_installer(path: str) -> None:
         "while (Get-Process -Id $p -ErrorAction SilentlyContinue) {",
         "    Start-Sleep -Milliseconds 300",
         "}",
-        f"Start-Process -FilePath '{escaped_path}' -ArgumentList '/SILENT', '/NOCLOSEAPPLICATIONS'",
+        f"Start-Process -FilePath '{escaped_path}' -ArgumentList '/SILENT', '/NOCLOSEAPPLICATIONS' -Verb RunAs",
     ]
     encoded = base64.b64encode(
         "\r\n".join(ps_lines).encode("utf-16-le")

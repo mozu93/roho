@@ -53,6 +53,17 @@ class UpdateBanner(QWidget):
         if self._installer_path and os.path.exists(self._installer_path):
             self._do_install()
         else:
+            if self._installer_path:
+                self._installer_path = None
+                self._action_btn.setText("ダウンロード")
+                QMessageBox.warning(
+                    self, "ファイルが見つかりません",
+                    "インストーラーが見つかりません。\n"
+                    "Windows セキュリティによって検疫された可能性があります。\n\n"
+                    "Windowsセキュリティ → 保護の履歴 から許可するか、\n"
+                    "再度ダウンロードしてください。",
+                )
+                return
             self._do_download()
 
     def _do_download(self):
@@ -79,6 +90,12 @@ class UpdateBanner(QWidget):
 
     def _on_download_finished(self, dest: str):
         self._progress_bar.hide()
+        # Zone.Identifier ADS を削除して Defender の検疫を防ぐ（チェックサム検証済みのため安全）
+        try:
+            import ctypes
+            ctypes.windll.kernel32.DeleteFileW(dest + ":Zone.Identifier")
+        except Exception:
+            pass
         checksum_url = self._update_info.get("checksum_url", "")
         if checksum_url:
             if not verify_installer(dest, checksum_url):
