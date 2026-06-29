@@ -223,7 +223,16 @@ class MainWindow(QMainWindow):
             "w": geo.width(), "h": geo.height(),
         }
         self._config.save(self._config_path)
+        # バックグラウンドスレッドを停止してからプロセスを終了
+        banner = getattr(self, "_update_banner", None)
+        if banner:
+            checker = getattr(banner, "_checker", None)
+            if checker and checker.isRunning():
+                checker.quit()
+                checker.wait(2000)
+        import os
         event.accept()
+        os._exit(0)
 
     def _on_logout(self):
         self._config.last_staff_name = ""
