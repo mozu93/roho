@@ -354,11 +354,30 @@ class SettingsTab(QWidget):
         save_path = self._config_path or os.path.join(
             os.path.dirname(os.path.abspath(__file__)), "..", "..", "app_config.json"
         )
-        if self._config.save(os.path.normpath(save_path)):
-            QMessageBox.information(self, "保存",
-                "データフォルダを保存しました。\nアプリを再起動すると新しいフォルダが使われます。")
-        else:
+        if not self._config.save(os.path.normpath(save_path)):
             QMessageBox.critical(self, "保存エラー", "設定ファイルの書き込みに失敗しました。")
+            return
+
+        reply = QMessageBox.question(
+            self, "保存完了 - 再起動が必要です",
+            "データフォルダを保存しました。\n\n"
+            "変更を反映するにはアプリの再起動が必要です。\n"
+            "今すぐ再起動しますか？",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.Yes,
+        )
+        if reply == QMessageBox.StandardButton.Yes:
+            self._restart_app()
+
+    @staticmethod
+    def _restart_app():
+        import sys
+        import subprocess
+        from PyQt6.QtWidgets import QApplication
+        exe = sys.executable
+        args = [] if getattr(sys, "frozen", False) else sys.argv
+        subprocess.Popen([exe] + args)
+        QApplication.quit()
 
     # ── M365設定・認証 ──
 

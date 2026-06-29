@@ -24,12 +24,25 @@ class MainWindow(QMainWindow):
         self.setWindowTitle(f"労働保険名簿管理システム v{__version__}")
         self.setMinimumSize(700, 500)
         self.resize(780, 720)
+        self._maybe_first_launch_setup()
         self._init_db()
         self._init_backup()
         self._ensure_login()
         self._build_ui()
         self._restore_geometry()
         QTimer.singleShot(200, self._show_notifications)
+
+    def _maybe_first_launch_setup(self):
+        """設定ファイルが存在しない（初回起動）場合にデータフォルダ選択を促す。"""
+        if os.path.exists(self._config_path):
+            return
+        from app.ui.dialogs.first_launch_dialog import FirstLaunchDialog
+        dlg = FirstLaunchDialog()
+        if dlg.exec() != FirstLaunchDialog.DialogCode.Accepted:
+            raise SystemExit(0)
+        if dlg.selected_dir:
+            self._config.data_dir = dlg.selected_dir
+        self._config.save(self._config_path)
 
     def _effective_data_dir(self) -> str:
         """データフォルダのパスを返す（data_dir → db_path のフォルダ → config と同フォルダ の優先順）"""
