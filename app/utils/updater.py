@@ -80,11 +80,16 @@ def download_installer(url: str, dest_path: str, progress_cb=None) -> str:
 
 def launch_installer(path: str) -> None:
     # NamedTemporaryFile で一意パスを生成（固定名ファイルへのシンボリックリンク攻撃対策）
+    # /CLOSEAPPLICATIONS: ファイルロック中のプロセスをインストーラー側が自動終了
     with tempfile.NamedTemporaryFile(
         mode="w", suffix=".bat", delete=False, dir=tempfile.gettempdir()
     ) as f:
         bat = f.name
-        f.write(f'@echo off\ntimeout /t 3 /nobreak >nul\n"{path}" /SILENT\n')
+        f.write(
+            f'@echo off\n'
+            f'timeout /t 8 /nobreak >nul\n'
+            f'"{path}" /SILENT /CLOSEAPPLICATIONS /RESTARTAPPLICATIONS\n'
+        )
     subprocess.Popen(["cmd", "/c", bat], creationflags=subprocess.CREATE_NO_WINDOW)
 
 

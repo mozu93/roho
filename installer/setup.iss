@@ -20,6 +20,8 @@ Compression=lzma
 SolidCompression=yes
 PrivilegesRequired=lowest
 UninstallDisplayIcon={app}\{#MyAppExeName}
+CloseApplications=yes
+RestartApplications=yes
 
 [Languages]
 Name: "japanese"; MessagesFile: "compiler:Languages\Japanese.isl"
