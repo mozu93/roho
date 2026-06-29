@@ -135,7 +135,10 @@ class UpdateBanner(QWidget):
                     f"{self._installer_path}\n\nエラー: {e}",
                 )
                 return
-            os._exit(0)
+            import ctypes as _ctypes
+            _ctypes.windll.kernel32.TerminateProcess(
+                _ctypes.windll.kernel32.GetCurrentProcess(), 0
+            )
         else:
             QMessageBox.information(
                 self, "開発環境",

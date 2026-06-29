@@ -227,8 +227,10 @@ class MainWindow(QMainWindow):
         except Exception:
             pass
         event.accept()
-        import os as _os
-        _os._exit(0)
+        import ctypes as _ctypes
+        _ctypes.windll.kernel32.TerminateProcess(
+            _ctypes.windll.kernel32.GetCurrentProcess(), 0
+        )
 
     def _on_logout(self):
         self._config.last_staff_name = ""
