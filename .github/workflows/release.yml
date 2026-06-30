@@ -24,7 +24,10 @@ jobs:
           python-version: "3.11"
 
       - name: Install dependencies
-        run: pip install -r requirements.txt pyinstaller pillow pywin32
+        run: pip install -r requirements.txt pyinstaller pillow
+
+      - name: Download rcedit
+        run: Invoke-WebRequest -Uri "https://github.com/electron/rcedit/releases/download/v2.0.0/rcedit-x64.exe" -OutFile "rcedit.exe"
 
       - name: Get version from tag
         id: get_version
@@ -39,7 +42,7 @@ jobs:
         run: pyinstaller rouho.spec --clean
 
       - name: Embed icon into EXE
-        run: python scripts/embed_icon.py dist\Rouho\Rouho.exe assets\icons\rouho.ico
+        run: .\rcedit.exe dist\Rouho\Rouho.exe --set-icon assets\icons\rouho.ico
 
       - name: Install Inno Setup
         run: choco install innosetup --no-progress -y
