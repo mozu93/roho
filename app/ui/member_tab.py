@@ -955,19 +955,45 @@ class MemberTab(QWidget):
             entry.setStyleSheet("background: white; border-bottom: 1px solid #e0e0e0;")
             entry_layout = QVBoxLayout(entry)
             entry_layout.setContentsMargins(8, 8, 8, 8)
+            header_row = QHBoxLayout()
             header = QLabel(
                 f"<b>{log.logged_at.strftime('%Y-%m-%d %H:%M')}</b>　{html.escape(log.logged_by)}　"
                 f"<span style='color:#666'>[{html.escape(cat_names)}]</span>"
             )
+            header_row.addWidget(header)
+            header_row.addStretch()
+            del_btn = QPushButton("削除")
+            del_btn.setFixedWidth(50)
+            del_btn.clicked.connect(lambda _, log_id=log.id: self._on_delete_activity_log(log_id))
+            header_row.addWidget(del_btn)
             content = QLabel(log.content)
             content.setTextFormat(Qt.TextFormat.PlainText)
             content.setWordWrap(True)
-            entry_layout.addWidget(header)
+            entry_layout.addLayout(header_row)
             entry_layout.addWidget(content)
             self._log_vbox.addWidget(entry)
 
         if not logs:
             self._log_vbox.addWidget(QLabel("対応履歴はありません。"))
+
+    def _on_delete_activity_log(self, log_id: int):
+        reply = QMessageBox.question(
+            self, "確認", "この対応履歴を削除しますか？",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+        )
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+        self._activity_svc.delete_log(log_id)
+        m = self._selected_member()
+        saved_id = m.id if m else None
+        self._refresh()  # 最終対応日更新のため
+        if saved_id is not None:
+            # refresh後も同じ行を選択し直す（ソート等で行位置が変わる場合に対応）
+            for row in range(self._table.rowCount()):
+                item = self._table.item(row, _COL_COMPANY_CODE)
+                if item and item.data(Qt.ItemDataRole.UserRole) == saved_id:
+                    self._table.selectRow(row)
+                    break
 
     def refresh_categories(self):
         current_id = self._cat_combo.currentData()

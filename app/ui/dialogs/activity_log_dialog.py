@@ -91,19 +91,36 @@ class ActivityLogDialog(QDialog):
             entry.setStyleSheet("background: white; border-bottom: 1px solid #e0e0e0;")
             entry_layout = QVBoxLayout(entry)
             entry_layout.setContentsMargins(8, 8, 8, 8)
+            header_row = QHBoxLayout()
             header = QLabel(
                 f"<b>{log.logged_at.strftime('%Y-%m-%d %H:%M')}</b>　{html.escape(log.logged_by)}　"
                 f"<span style='color:#666'>[{html.escape(cat_names)}]</span>"
             )
+            header_row.addWidget(header)
+            header_row.addStretch()
+            if not self._readonly:
+                del_btn = QPushButton("削除")
+                del_btn.setFixedWidth(50)
+                del_btn.clicked.connect(lambda _, log_id=log.id: self._on_delete_log(log_id))
+                header_row.addWidget(del_btn)
             content = QLabel(log.content)
             content.setTextFormat(Qt.TextFormat.PlainText)
             content.setWordWrap(True)
-            entry_layout.addWidget(header)
+            entry_layout.addLayout(header_row)
             entry_layout.addWidget(content)
             self._log_vbox.addWidget(entry)
 
         if not logs:
             self._log_vbox.addWidget(QLabel("対応履歴はありません。"))
+
+    def _on_delete_log(self, log_id: int):
+        reply = QMessageBox.question(
+            self, "確認", "この対応履歴を削除しますか？",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+        )
+        if reply == QMessageBox.StandardButton.Yes:
+            self._svc.delete_log(log_id)
+            self._load_logs()
 
     def _on_save(self):
         content = self._content_edit.toPlainText().strip()
