@@ -167,6 +167,28 @@ class MemberService:
                 session.expunge_all()
             return m
 
+    def find_ins_number_conflict(
+        self, branch_number: str, ins_number: str, exclude_member_id: int | None = None
+    ):
+        """指定の枝番号・番号の組み合わせを既に使用している会員を返す（自分自身は除外）"""
+        if not ins_number:
+            return None
+        with get_session(self._engine) as session:
+            q = (
+                session.query(Member)
+                .join(InsuranceEntry, InsuranceEntry.member_id == Member.id)
+                .filter(
+                    InsuranceEntry.branch_number == branch_number,
+                    InsuranceEntry.ins_number == ins_number,
+                )
+            )
+            if exclude_member_id is not None:
+                q = q.filter(Member.id != exclude_member_id)
+            m = q.first()
+            if m:
+                session.expunge_all()
+            return m
+
     def get_current_snapshot(self, member_id: int) -> dict:
         """セッション内で member_to_dict を呼び DetachedInstanceError を回避する"""
         with get_session(self._engine) as session:

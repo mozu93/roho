@@ -74,6 +74,28 @@ def test_search_by_ins_type(svc):
     assert len(results) == 1
 
 
+def test_find_ins_number_conflict(svc):
+    a = svc.create({"member_number": "9001", "org_name": "A社", "insurance_entries": [
+        {"ins_type": "ippan", "branch_number": "0", "ins_number": "101",
+         "is_tokubetsu": False, "is_ikkatsu": False}
+    ]}, "山田")
+    svc.create({"member_number": "9002", "org_name": "B社", "insurance_entries": [
+        {"ins_type": "kensetsu_koyou", "branch_number": "2", "ins_number": "101",
+         "is_tokubetsu": False, "is_ikkatsu": False}
+    ]}, "山田")
+
+    # 同じ枝番かつ同じ番号 → 重複
+    dup = svc.find_ins_number_conflict("0", "101")
+    assert dup is not None
+    assert dup.org_name == "A社"
+
+    # 枝番が異なれば同じ番号でも重複としない
+    assert svc.find_ins_number_conflict("2", "999") is None
+
+    # 自分自身は除外される
+    assert svc.find_ins_number_conflict("0", "101", exclude_member_id=a.id) is None
+
+
 def test_update_creates_change_record(svc):
     m = svc.create({"member_number": "9001", "org_name": "旧社名", "insurance_entries": []}, "山田")
     svc.update(m.id, {"org_name": "新社名", "insurance_entries": []}, "住所変更のため", "山田")

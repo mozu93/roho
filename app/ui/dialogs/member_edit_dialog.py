@@ -453,6 +453,19 @@ class MemberEditDialog(QDialog):
                     f"会員No.「{data['member_number']}」は既に「{dup.org_name}」で使用されています。",
                 )
                 return
+        for entry in data["insurance_entries"]:
+            if entry["ins_number"]:
+                dup = self._svc.find_ins_number_conflict(
+                    entry["branch_number"], entry["ins_number"],
+                    exclude_member_id=self._member_id,
+                )
+                if dup:
+                    QMessageBox.warning(
+                        self, "入力エラー",
+                        f"枝番「{entry['branch_number']}」の番号「{entry['ins_number']}」は"
+                        f"既に「{dup.org_name}」で使用されています。",
+                    )
+                    return
         try:
             if self._member_id:
                 reason = self._f_reason.text().strip()
