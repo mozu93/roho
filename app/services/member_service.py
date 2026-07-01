@@ -33,6 +33,8 @@ class MemberService:
                 q = q.filter(
                     Member.org_name.like(kw)
                     | Member.org_kana.like(kw)
+                    | Member.rep_name.like(kw)
+                    | Member.rep_kana.like(kw)
                     | Member.address.like(kw)
                     | Member.tel.like(kw)
                 )

@@ -112,7 +112,7 @@ class WithdrawnTab(QWidget):
         search_font.setPointSize(search_font.pointSize() + 2)
 
         self._keyword_edit = QLineEdit()
-        self._keyword_edit.setPlaceholderText("事業所名・フリガナ・住所・電話番号で検索")
+        self._keyword_edit.setPlaceholderText("事業所名・フリガナ・代表者名・代表者フリガナ・住所・電話番号で検索")
         self._keyword_edit.textChanged.connect(self._refresh)
         self._keyword_edit.setFont(search_font)
         search_row.addWidget(self._keyword_edit)

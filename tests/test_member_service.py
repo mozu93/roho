@@ -42,6 +42,25 @@ def test_search_by_keyword(svc):
     assert results[0].org_name == "㈱テスト商事"
 
 
+def test_search_by_rep_name_and_kana(svc):
+    svc.create({
+        "member_number": "9001", "org_name": "㈱テスト商事",
+        "rep_name": "山田太郎", "rep_kana": "ヤマダタロウ",
+        "insurance_entries": [],
+    }, "山田")
+    svc.create({
+        "member_number": "9002", "org_name": "△△建設",
+        "rep_name": "鈴木一郎", "rep_kana": "スズキイチロウ",
+        "insurance_entries": [],
+    }, "山田")
+    by_name = svc.search(keyword="山田太郎")
+    assert len(by_name) == 1
+    assert by_name[0].org_name == "㈱テスト商事"
+    by_kana = svc.search(keyword="スズキ")
+    assert len(by_kana) == 1
+    assert by_kana[0].org_name == "△△建設"
+
+
 def test_search_by_ins_type(svc):
     svc.create({"member_number": "9001", "org_name": "A社", "insurance_entries": [
         {"ins_type": "ippan", "branch_number": "0", "ins_number": "101",
