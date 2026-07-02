@@ -64,6 +64,12 @@ class ActivityService:
             session.expunge_all()
             return log
 
+    def delete_log(self, log_id: int) -> None:
+        with get_session(self._engine) as session:
+            log = session.get(ActivityLog, log_id)
+            if log:
+                session.delete(log)
+
     def get_unread(self, staff_name: str) -> list[dict]:
         with get_session(self._engine) as session:
             staff = session.query(Staff).filter_by(name=staff_name, is_active=True).first()

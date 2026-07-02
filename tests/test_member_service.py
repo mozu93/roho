@@ -42,6 +42,25 @@ def test_search_by_keyword(svc):
     assert results[0].org_name == "㈱テスト商事"
 
 
+def test_search_by_rep_name_and_kana(svc):
+    svc.create({
+        "member_number": "9001", "org_name": "㈱テスト商事",
+        "rep_name": "山田太郎", "rep_kana": "ヤマダタロウ",
+        "insurance_entries": [],
+    }, "山田")
+    svc.create({
+        "member_number": "9002", "org_name": "△△建設",
+        "rep_name": "鈴木一郎", "rep_kana": "スズキイチロウ",
+        "insurance_entries": [],
+    }, "山田")
+    by_name = svc.search(keyword="山田太郎")
+    assert len(by_name) == 1
+    assert by_name[0].org_name == "㈱テスト商事"
+    by_kana = svc.search(keyword="スズキ")
+    assert len(by_kana) == 1
+    assert by_kana[0].org_name == "△△建設"
+
+
 def test_search_by_ins_type(svc):
     svc.create({"member_number": "9001", "org_name": "A社", "insurance_entries": [
         {"ins_type": "ippan", "branch_number": "0", "ins_number": "101",
@@ -53,6 +72,28 @@ def test_search_by_ins_type(svc):
     ]}, "山田")
     results = svc.search(ins_types=["ippan"])
     assert len(results) == 1
+
+
+def test_find_ins_number_conflict(svc):
+    a = svc.create({"member_number": "9001", "org_name": "A社", "insurance_entries": [
+        {"ins_type": "ippan", "branch_number": "0", "ins_number": "101",
+         "is_tokubetsu": False, "is_ikkatsu": False}
+    ]}, "山田")
+    svc.create({"member_number": "9002", "org_name": "B社", "insurance_entries": [
+        {"ins_type": "kensetsu_koyou", "branch_number": "2", "ins_number": "101",
+         "is_tokubetsu": False, "is_ikkatsu": False}
+    ]}, "山田")
+
+    # 同じ枝番かつ同じ番号 → 重複
+    dup = svc.find_ins_number_conflict("0", "101")
+    assert dup is not None
+    assert dup.org_name == "A社"
+
+    # 枝番が異なれば同じ番号でも重複としない
+    assert svc.find_ins_number_conflict("2", "999") is None
+
+    # 自分自身は除外される
+    assert svc.find_ins_number_conflict("0", "101", exclude_member_id=a.id) is None
 
 
 def test_update_creates_change_record(svc):

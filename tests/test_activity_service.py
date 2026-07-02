@@ -51,6 +51,14 @@ def test_confirm_all(svc, engine):
     svc.confirm_all("鈴木")
     assert len(svc.get_unread("鈴木")) == 0
 
+def test_delete_log_removes_it_and_confirmations(svc, engine):
+    with get_session(engine) as s:
+        m_id = s.query(Member).first().id
+    log = svc.add_log(m_id, "テスト", [], "山田")
+    svc.delete_log(log.id)
+    assert svc.get_logs(m_id) == []
+    assert svc.get_unread("鈴木") == []
+
 def test_category_crud(svc):
     cat = svc.add_category("新規加入")
     cats = svc.get_categories()

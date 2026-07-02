@@ -33,6 +33,8 @@ class MemberService:
                 q = q.filter(
                     Member.org_name.like(kw)
                     | Member.org_kana.like(kw)
+                    | Member.rep_name.like(kw)
+                    | Member.rep_kana.like(kw)
                     | Member.address.like(kw)
                     | Member.tel.like(kw)
                 )
@@ -161,6 +163,28 @@ class MemberService:
     def find_by_member_number(self, member_number: str):
         with get_session(self._engine) as session:
             m = session.query(Member).filter_by(member_number=member_number).first()
+            if m:
+                session.expunge_all()
+            return m
+
+    def find_ins_number_conflict(
+        self, branch_number: str, ins_number: str, exclude_member_id: int | None = None
+    ):
+        """指定の枝番号・番号の組み合わせを既に使用している会員を返す（自分自身は除外）"""
+        if not ins_number:
+            return None
+        with get_session(self._engine) as session:
+            q = (
+                session.query(Member)
+                .join(InsuranceEntry, InsuranceEntry.member_id == Member.id)
+                .filter(
+                    InsuranceEntry.branch_number == branch_number,
+                    InsuranceEntry.ins_number == ins_number,
+                )
+            )
+            if exclude_member_id is not None:
+                q = q.filter(Member.id != exclude_member_id)
+            m = q.first()
             if m:
                 session.expunge_all()
             return m
