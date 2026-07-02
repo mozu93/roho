@@ -605,8 +605,11 @@ class MemberTab(QWidget):
             last_item.setTextAlignment(_ac)
             self._table.setItem(row, 29, last_item)
             self._table.setItem(row, 30, SortableTableWidgetItem(m.note or ""))
-        self._table.horizontalHeader().setSortIndicator(-1, Qt.SortOrder.AscendingOrder)
+        saved_col = self._get_staff_setting("sort_column", -1)
+        saved_ord = Qt.SortOrder(self._get_staff_setting("sort_order", Qt.SortOrder.AscendingOrder.value))
+        self._table.horizontalHeader().setSortIndicator(saved_col, saved_ord)
         self._table.setSortingEnabled(True)
+        self._rebuild_member_row_map()
         self._resizing_programmatically = True
         saved = self._get_staff_setting("column_widths",
                 self._config.member_column_widths)
@@ -818,6 +821,9 @@ class MemberTab(QWidget):
         """メインヘッダーでのソート変更を固定ビューのインジケーターに反映する"""
         self._frozen_view.horizontalHeader().setSortIndicator(logical_col, order)
         self._rebuild_member_row_map()
+        if logical_col >= 0:
+            self._set_staff_setting("sort_column", logical_col)
+            self._set_staff_setting("sort_order", int(order))
 
     def _on_frozen_clicked(self, index):
         """固定オーバーレイのクリック処理"""
