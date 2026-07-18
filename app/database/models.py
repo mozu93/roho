@@ -1,7 +1,7 @@
 from datetime import datetime
 from sqlalchemy import (
-    Column, Integer, String, Boolean, DateTime, Date,
-    Text, ForeignKey, Table,
+    Column, Integer, String, Boolean, DateTime, Date, Float,
+    Text, ForeignKey, Table, UniqueConstraint,
 )
 from sqlalchemy.orm import relationship, declarative_base
 
@@ -179,3 +179,55 @@ class SendLog(Base):
     sent_at = Column(DateTime)
 
     job = relationship("SendJob", back_populates="logs")
+
+
+class AnnualFeeRule(Base):
+    __tablename__ = "annual_fee_rules"
+    fiscal_year = Column(Integer, primary_key=True)
+    fee_rate = Column(Float, nullable=False, default=0.05)
+    member_min_fee = Column(Integer, nullable=False, default=5000)
+    non_member_addition = Column(Integer, nullable=False, default=14000)
+    tax_rate = Column(Float, nullable=False, default=0.10)
+
+
+class AnnualFeeRecord(Base):
+    __tablename__ = "annual_fee_records"
+    __table_args__ = (UniqueConstraint("fiscal_year", "member_id"),)
+
+    id = Column(Integer, primary_key=True)
+    fiscal_year = Column(Integer, nullable=False)
+    member_id = Column(Integer, ForeignKey("members.id"), nullable=False)
+
+    is_member_for_fee = Column(Boolean, nullable=False)
+    member_override_reason = Column(Text)
+
+    premium_branch_0 = Column(Integer, nullable=False, default=0)
+    premium_branch_2 = Column(Integer, nullable=False, default=0)
+    premium_branch_4 = Column(Integer, nullable=False, default=0)
+    premium_branch_5 = Column(Integer, nullable=False, default=0)
+    premium_branch_6 = Column(Integer, nullable=False, default=0)
+
+    premium_total = Column(Integer, nullable=False, default=0)
+    five_percent_amount = Column(Integer, nullable=False, default=0)
+    base_fee_amount = Column(Integer, nullable=False, default=0)
+    non_member_addition_amount = Column(Integer, nullable=False, default=0)
+    fee_without_tax = Column(Integer, nullable=False, default=0)
+    tax_amount = Column(Integer, nullable=False, default=0)
+    total_amount = Column(Integer, nullable=False, default=0)
+
+    is_lump_sum_payment = Column(Boolean, nullable=False, default=False)
+    entrust_start_month = Column(Date)
+    auto_payment_period = Column(String)
+    final_payment_period = Column(String)
+    payment_period_override_reason = Column(Text)
+    payment_method = Column(String)
+
+    paid_amount = Column(Integer)
+    paid_at = Column(Date)
+    reminder_status = Column(String, nullable=False, default="未督促")
+    note = Column(Text)
+
+    created_at = Column(DateTime, nullable=False, default=datetime.now)
+    updated_at = Column(DateTime, nullable=False, default=datetime.now, onupdate=datetime.now)
+
+    member = relationship("Member")
