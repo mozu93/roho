@@ -3,10 +3,11 @@ from datetime import datetime
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QComboBox, QLineEdit, QPushButton,
     QTableWidget, QTableWidgetItem, QAbstractItemView, QHeaderView,
-    QLabel, QMessageBox, QInputDialog,
+    QLabel, QMessageBox, QInputDialog, QFileDialog,
 )
 from PyQt6.QtCore import Qt
 from app.services.fee_service import FeeService
+from app.services.fee_export_service import FeeExportService
 from app.ui.dialogs.fee_edit_dialog import FeeEditDialog
 
 FILTERS = ["すべて", "未入力", "未入金", "入金済", "1期", "2期", "3期", "請求なし", "非会員", "督促中"]
@@ -41,6 +42,9 @@ class FeeTab(QWidget):
         recalc_btn = QPushButton("再計算")
         recalc_btn.clicked.connect(self._on_recalculate)
         top_row.addWidget(recalc_btn)
+        export_btn = QPushButton("Excel出力")
+        export_btn.clicked.connect(self._on_export)
+        top_row.addWidget(export_btn)
         top_row.addStretch()
         layout.addLayout(top_row)
 
@@ -149,3 +153,18 @@ class FeeTab(QWidget):
         count = self._svc.recalculate_all(fiscal_year)
         QMessageBox.information(self, "再計算", f"{count}件を再計算しました。")
         self._refresh()
+
+    def _on_export(self):
+        fiscal_year = self._current_fiscal_year()
+        if fiscal_year is None:
+            QMessageBox.warning(self, "確認", "先に年度を選択または追加してください。")
+            return
+        default_name = f"手数料計算_{fiscal_year}年度.xlsx"
+        path, _ = QFileDialog.getSaveFileName(self, "Excel出力", default_name, "Excel (*.xlsx)")
+        if not path:
+            return
+        try:
+            count = FeeExportService(self._engine).export_excel(fiscal_year, path)
+            QMessageBox.information(self, "完了", f"{count}件を出力しました。")
+        except Exception as e:
+            QMessageBox.critical(self, "エラー", str(e))
