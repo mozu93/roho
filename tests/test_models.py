@@ -78,3 +78,41 @@ def test_annual_fee_record_unique_constraint(db):
     ))
     with pytest.raises(IntegrityError):
         db.commit()
+
+
+def test_annual_renewal_create(db):
+    from app.database.models import AnnualRenewal
+    m = Member(member_number="9001", org_name="㈱テスト商事")
+    db.add(m)
+    db.flush()
+    renewal = AnnualRenewal(fiscal_year=2026, member_id=m.id, overall_status="未提出")
+    db.add(renewal)
+    db.commit()
+    assert db.get(AnnualRenewal, renewal.id).overall_status == "未提出"
+
+
+def test_annual_renewal_unique_constraint(db):
+    from app.database.models import AnnualRenewal
+    from sqlalchemy.exc import IntegrityError
+    m = Member(member_number="9001", org_name="㈱テスト商事")
+    db.add(m)
+    db.flush()
+    db.add(AnnualRenewal(fiscal_year=2026, member_id=m.id, overall_status="未提出"))
+    db.commit()
+    db.add(AnnualRenewal(fiscal_year=2026, member_id=m.id, overall_status="未提出"))
+    with pytest.raises(IntegrityError):
+        db.commit()
+
+
+def test_annual_renewal_item_relationship(db):
+    from app.database.models import AnnualRenewal, AnnualRenewalItem
+    m = Member(member_number="9001", org_name="㈱テスト商事")
+    db.add(m)
+    db.flush()
+    renewal = AnnualRenewal(fiscal_year=2026, member_id=m.id, overall_status="未提出")
+    db.add(renewal)
+    db.flush()
+    db.add(AnnualRenewalItem(
+        annual_renewal_id=renewal.id, branch_type="ippan", submission_status="未提出"))
+    db.commit()
+    assert len(db.get(AnnualRenewal, renewal.id).items) == 1

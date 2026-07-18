@@ -231,3 +231,38 @@ class AnnualFeeRecord(Base):
     updated_at = Column(DateTime, nullable=False, default=datetime.now, onupdate=datetime.now)
 
     member = relationship("Member")
+
+
+class AnnualRenewal(Base):
+    __tablename__ = "annual_renewals"
+    __table_args__ = (UniqueConstraint("fiscal_year", "member_id"),)
+
+    id = Column(Integer, primary_key=True)
+    fiscal_year = Column(Integer, nullable=False)
+    member_id = Column(Integer, ForeignKey("members.id"), nullable=False)
+
+    overall_status = Column(String, nullable=False, default="未提出")
+    overall_status_manual = Column(Boolean, nullable=False, default=False)
+    last_contacted_at = Column(Date)
+    note = Column(Text)
+
+    created_at = Column(DateTime, nullable=False, default=datetime.now)
+    updated_at = Column(DateTime, nullable=False, default=datetime.now, onupdate=datetime.now)
+
+    member = relationship("Member")
+    items = relationship(
+        "AnnualRenewalItem", back_populates="renewal", cascade="all, delete-orphan"
+    )
+
+
+class AnnualRenewalItem(Base):
+    __tablename__ = "annual_renewal_items"
+    __table_args__ = (UniqueConstraint("annual_renewal_id", "branch_type"),)
+
+    id = Column(Integer, primary_key=True)
+    annual_renewal_id = Column(Integer, ForeignKey("annual_renewals.id"), nullable=False)
+    branch_type = Column(String, nullable=False)
+    submission_status = Column(String, nullable=False, default="未提出")
+    confirmed_at = Column(Date)
+
+    renewal = relationship("AnnualRenewal", back_populates="items")
