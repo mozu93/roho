@@ -39,3 +39,21 @@ def calculate_fee(premiums: dict, is_member: bool, rule: AnnualFeeRule) -> dict:
         "tax_amount": tax_amount,
         "total_amount": total_amount,
     }
+
+
+def determine_payment_period(fiscal_year: int, is_lump_sum_payment: bool,
+                              entrust_start_month) -> str:
+    """支払時期を自動判定する。優先順位: 一括払い > 新規委託の月判定 > 既存事業所(2期)。"""
+    if is_lump_sum_payment:
+        return "1期"
+    if entrust_start_month is not None:
+        fy_start = date(fiscal_year, 4, 1)
+        fy_end = date(fiscal_year + 1, 3, 31)
+        if fy_start <= entrust_start_month <= fy_end:
+            month = entrust_start_month.month
+            if 4 <= month <= 8:
+                return "2期"
+            if 9 <= month <= 12:
+                return "3期"
+            return "請求なし"
+    return "2期"

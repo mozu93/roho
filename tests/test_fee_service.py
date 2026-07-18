@@ -1,6 +1,7 @@
 import pytest
+from datetime import date
 from app.database.models import AnnualFeeRule
-from app.services.fee_service import calculate_fee
+from app.services.fee_service import calculate_fee, determine_payment_period
 
 
 def _rule(fiscal_year=2026):
@@ -67,3 +68,35 @@ def test_calculate_fee_rounding_floor():
     assert result["fee_without_tax"] == 9999
     # 消費税 floor(9999 * 0.10) = 999円
     assert result["tax_amount"] == 999
+
+
+def test_determine_payment_period_lump_sum_priority():
+    # 一括払い かつ 新規委託月（本来3期相当）でも 1期が優先される
+    result = determine_payment_period(2026, True, date(2026, 10, 1))
+    assert result == "1期"
+
+
+def test_determine_payment_period_existing_member_default():
+    result = determine_payment_period(2026, False, None)
+    assert result == "2期"
+
+
+def test_determine_payment_period_new_entrust_summer():
+    result = determine_payment_period(2026, False, date(2026, 6, 1))
+    assert result == "2期"
+
+
+def test_determine_payment_period_new_entrust_autumn():
+    result = determine_payment_period(2026, False, date(2026, 10, 1))
+    assert result == "3期"
+
+
+def test_determine_payment_period_new_entrust_winter_no_billing():
+    result = determine_payment_period(2026, False, date(2027, 2, 1))
+    assert result == "請求なし"
+
+
+def test_determine_payment_period_old_entrust_defaults_to_2ki():
+    # 委託開始が年度範囲(2026-04-01〜2027-03-31)より前 → 既存事業所扱いで2期
+    result = determine_payment_period(2026, False, date(2020, 6, 1))
+    assert result == "2期"
