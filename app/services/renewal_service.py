@@ -1,6 +1,6 @@
 from datetime import date, datetime
 from app.database.connection import get_session
-from app.database.models import AnnualRenewal, AnnualRenewalItem, Member, InsuranceEntry
+from app.database.models import AnnualRenewal, AnnualRenewalItem, Member
 
 SUBMISSION_STATUSES = ["未提出", "提出済", "不備あり", "対象外"]
 OVERALL_STATUSES = ["未提出", "一部提出", "提出済", "不備あり", "完了"]
