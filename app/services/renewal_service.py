@@ -1,6 +1,6 @@
 from datetime import date, datetime
 from app.database.connection import get_session
-from app.database.models import AnnualRenewal, AnnualRenewalItem, Member
+from app.database.models import AnnualRenewal, AnnualRenewalItem, Member, InsuranceEntry
 
 SUBMISSION_STATUSES = ["未提出", "提出済", "不備あり", "対象外"]
 OVERALL_STATUSES = ["未提出", "一部提出", "提出済", "不備あり", "完了"]
@@ -19,3 +19,49 @@ def compute_overall_status(item_statuses: list) -> str:
     if all(s == "未提出" for s in relevant):
         return "未提出"
     return "一部提出"
+
+
+class RenewalService:
+    def __init__(self, engine):
+        self._engine = engine
+
+    def list_years(self) -> list:
+        with get_session(self._engine) as session:
+            rows = (
+                session.query(AnnualRenewal.fiscal_year)
+                .distinct()
+                .order_by(AnnualRenewal.fiscal_year.desc())
+                .all()
+            )
+            return [r[0] for r in rows]
+
+    def generate_records(self, fiscal_year: int) -> int:
+        """名簿の委託中事業所から、当該年度にまだレコードがない分だけ追加する。
+        保有する枝番ごとに未提出のitemを作成する。"""
+        with get_session(self._engine) as session:
+            existing_ids = {
+                r[0] for r in session.query(AnnualRenewal.member_id)
+                .filter(AnnualRenewal.fiscal_year == fiscal_year).all()
+            }
+            members = session.query(Member).filter(Member.is_active == True).all()
+            added = 0
+            for m in members:
+                if m.id in existing_ids:
+                    continue
+                renewal = AnnualRenewal(
+                    fiscal_year=fiscal_year,
+                    member_id=m.id,
+                    overall_status="未提出",
+                    overall_status_manual=False,
+                )
+                session.add(renewal)
+                session.flush()
+                branch_types = {e.ins_type for e in m.insurance_entries}
+                for branch_type in branch_types:
+                    session.add(AnnualRenewalItem(
+                        annual_renewal_id=renewal.id,
+                        branch_type=branch_type,
+                        submission_status="未提出",
+                    ))
+                added += 1
+            return added

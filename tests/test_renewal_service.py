@@ -1,5 +1,20 @@
 import pytest
-from app.services.renewal_service import compute_overall_status
+from sqlalchemy import create_engine
+from app.database.models import Base, Member, InsuranceEntry, AnnualRenewal, AnnualRenewalItem
+from app.database.connection import get_session
+from app.services.renewal_service import compute_overall_status, RenewalService
+
+
+@pytest.fixture
+def engine():
+    eng = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(eng)
+    return eng
+
+
+@pytest.fixture
+def svc(engine):
+    return RenewalService(engine)
 
 
 def test_compute_overall_status_all_submitted():
@@ -28,3 +43,51 @@ def test_compute_overall_status_empty_list_is_not_submitted():
 
 def test_compute_overall_status_all_not_applicable_is_not_submitted():
     assert compute_overall_status(["対象外", "対象外"]) == "未提出"
+
+
+def test_generate_records_creates_for_active_members_with_branches(svc):
+    with get_session(svc._engine) as session:
+        m1 = Member(member_number="9001", org_name="A社", is_active=True, is_member=True)
+        m2 = Member(member_number="9002", org_name="B社", is_active=False, is_member=True)
+        session.add_all([m1, m2])
+        session.flush()
+        session.add(InsuranceEntry(member_id=m1.id, ins_type="ippan", branch_number="0"))
+        session.add(InsuranceEntry(member_id=m1.id, ins_type="kensetsu_koyou", branch_number="2"))
+    added = svc.generate_records(2026)
+    assert added == 1  # 委託中の1件のみ
+    with get_session(svc._engine) as session:
+        renewal = session.query(AnnualRenewal).filter_by(fiscal_year=2026).first()
+        assert renewal.overall_status == "未提出"
+        items = session.query(AnnualRenewalItem).filter_by(annual_renewal_id=renewal.id).all()
+        assert len(items) == 2
+        assert {i.branch_type for i in items} == {"ippan", "kensetsu_koyou"}
+        assert all(i.submission_status == "未提出" for i in items)
+
+
+def test_generate_records_skips_existing(svc):
+    with get_session(svc._engine) as session:
+        session.add(Member(member_number="9001", org_name="A社", is_active=True, is_member=True))
+    svc.generate_records(2026)
+    added_second = svc.generate_records(2026)
+    assert added_second == 0
+
+
+def test_generate_records_member_without_branches_has_no_items(svc):
+    with get_session(svc._engine) as session:
+        session.add(Member(member_number="9001", org_name="A社", is_active=True, is_member=True))
+    added = svc.generate_records(2026)
+    assert added == 1
+    with get_session(svc._engine) as session:
+        renewal = session.query(AnnualRenewal).filter_by(fiscal_year=2026).first()
+        assert renewal.overall_status == "未提出"
+        items = session.query(AnnualRenewalItem).filter_by(annual_renewal_id=renewal.id).all()
+        assert len(items) == 0
+
+
+def test_list_years_distinct_descending(svc):
+    with get_session(svc._engine) as session:
+        session.add(Member(member_number="9001", org_name="A社", is_active=True, is_member=True))
+        session.add(Member(member_number="9002", org_name="B社", is_active=True, is_member=True))
+    svc.generate_records(2025)
+    svc.generate_records(2026)
+    assert svc.list_years() == [2026, 2025]
