@@ -260,3 +260,49 @@ def test_recalculate_all_applies_new_rule(svc):
     with get_session(svc._engine) as session:
         record = session.get(AnnualFeeRecord, record_id)
         assert record.fee_without_tax == 6000
+
+
+def test_search_by_keyword(svc):
+    with get_session(svc._engine) as session:
+        session.add(Member(member_number="9001", org_name="㈱テスト商事", is_active=True, is_member=True))
+        session.add(Member(member_number="9002", org_name="△△建設", is_active=True, is_member=True))
+    svc.generate_records(2026)
+    results = svc.search(2026, keyword="テスト")
+    assert len(results) == 1
+    assert results[0].member.org_name == "㈱テスト商事"
+
+
+def test_search_filter_non_member(svc):
+    with get_session(svc._engine) as session:
+        session.add(Member(member_number="9001", org_name="A社", is_active=True, is_member=True))
+        session.add(Member(member_number="9002", org_name="B社", is_active=True, is_member=False))
+    svc.generate_records(2026)
+    results = svc.search(2026, status_filter="非会員")
+    assert len(results) == 1
+    assert results[0].member.org_name == "B社"
+
+
+def test_search_filter_unpaid_excludes_no_billing(svc):
+    with get_session(svc._engine) as session:
+        session.add(Member(member_number="9001", org_name="A社", is_active=True, is_member=True))
+        session.add(Member(member_number="9002", org_name="B社", is_active=True, is_member=True))
+    svc.generate_records(2026)
+    with get_session(svc._engine) as session:
+        records = session.query(AnnualFeeRecord).filter_by(fiscal_year=2026).all()
+        records[0].final_payment_period = "請求なし"
+        records[1].final_payment_period = "2期"
+    results = svc.search(2026, status_filter="未入金")
+    assert len(results) == 1
+    assert results[0].final_payment_period == "2期"
+
+
+def test_search_filter_paid(svc):
+    from datetime import date
+    with get_session(svc._engine) as session:
+        session.add(Member(member_number="9001", org_name="A社", is_active=True, is_member=True))
+    svc.generate_records(2026)
+    with get_session(svc._engine) as session:
+        record_id = session.query(AnnualFeeRecord).filter_by(fiscal_year=2026).first().id
+    svc.update(record_id, {"paid_amount": 5500, "paid_at": date(2026, 8, 1)})
+    results = svc.search(2026, status_filter="入金済")
+    assert len(results) == 1

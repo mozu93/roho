@@ -210,3 +210,39 @@ class FeeService:
                     record.final_payment_period = record.auto_payment_period
                 record.updated_at = datetime.now()
             return len(records)
+
+    def search(self, fiscal_year: int, keyword: str = "", status_filter: str = None) -> list:
+        with get_session(self._engine) as session:
+            q = (
+                session.query(AnnualFeeRecord)
+                .join(Member, AnnualFeeRecord.member_id == Member.id)
+                .filter(AnnualFeeRecord.fiscal_year == fiscal_year)
+            )
+            if keyword:
+                kw = f"%{keyword}%"
+                cond = Member.org_name.like(kw) | Member.member_number.like(kw)
+                if keyword.isdigit():
+                    cond = cond | (Member.company_code == int(keyword))
+                q = q.filter(cond)
+
+            if status_filter == "未入力":
+                q = q.filter(AnnualFeeRecord.premium_total == 0)
+            elif status_filter == "未入金":
+                q = q.filter(
+                    AnnualFeeRecord.paid_at.is_(None),
+                    AnnualFeeRecord.final_payment_period != "請求なし",
+                )
+            elif status_filter == "入金済":
+                q = q.filter(AnnualFeeRecord.paid_at.isnot(None))
+            elif status_filter in ("1期", "2期", "3期", "請求なし"):
+                q = q.filter(AnnualFeeRecord.final_payment_period == status_filter)
+            elif status_filter == "非会員":
+                q = q.filter(AnnualFeeRecord.is_member_for_fee == False)
+            elif status_filter == "督促中":
+                q = q.filter(AnnualFeeRecord.reminder_status.in_(["督促済", "再督促予定"]))
+
+            records = q.order_by(Member.member_number).all()
+            for r in records:
+                _ = r.member
+            session.expunge_all()
+            return records
