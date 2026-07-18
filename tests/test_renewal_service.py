@@ -1,3 +1,4 @@
+from datetime import date
 import pytest
 from sqlalchemy import create_engine
 from app.database.models import Base, Member, InsuranceEntry, AnnualRenewal, AnnualRenewalItem
@@ -144,3 +145,54 @@ def test_get_does_not_duplicate_existing_items(svc):
     with get_session(svc._engine) as session:
         count = session.query(AnnualRenewalItem).filter_by(annual_renewal_id=renewal_id).count()
         assert count == 1
+
+
+def _setup_renewal(svc, ins_types=("ippan", "kensetsu_koyou")):
+    with get_session(svc._engine) as session:
+        m = Member(member_number="9001", org_name="A社", is_active=True, is_member=True)
+        session.add(m)
+        session.flush()
+        for ins_type in ins_types:
+            session.add(InsuranceEntry(member_id=m.id, ins_type=ins_type, branch_number="0"))
+    svc.generate_records(2026)
+    with get_session(svc._engine) as session:
+        return session.query(AnnualRenewal).filter_by(fiscal_year=2026).first().id
+
+
+def test_update_recomputes_overall_status_from_items(svc):
+    renewal_id = _setup_renewal(svc)
+    updated = svc.update(renewal_id, {
+        "ippan": {"submission_status": "提出済", "confirmed_at": None},
+        "kensetsu_koyou": {"submission_status": "未提出", "confirmed_at": None},
+    }, {"overall_status_manual": False, "overall_status": None,
+        "last_contacted_at": None, "note": ""})
+    assert updated.overall_status == "一部提出"
+
+
+def test_update_auto_sets_confirmed_at_when_submitted_without_date(svc):
+    renewal_id = _setup_renewal(svc, ins_types=("ippan",))
+    updated = svc.update(renewal_id, {
+        "ippan": {"submission_status": "提出済", "confirmed_at": None},
+    }, {"overall_status_manual": False, "overall_status": None,
+        "last_contacted_at": None, "note": ""})
+    item = next(i for i in updated.items if i.branch_type == "ippan")
+    assert item.confirmed_at == date.today()
+
+
+def test_update_keeps_manual_overall_status(svc):
+    renewal_id = _setup_renewal(svc, ins_types=("ippan",))
+    updated = svc.update(renewal_id, {
+        "ippan": {"submission_status": "未提出", "confirmed_at": None},
+    }, {"overall_status_manual": True, "overall_status": "完了",
+        "last_contacted_at": None, "note": ""})
+    assert updated.overall_status == "完了"
+
+
+def test_update_saves_note_and_last_contacted(svc):
+    renewal_id = _setup_renewal(svc, ins_types=("ippan",))
+    updated = svc.update(renewal_id, {
+        "ippan": {"submission_status": "未提出", "confirmed_at": None},
+    }, {"overall_status_manual": False, "overall_status": None,
+        "last_contacted_at": date(2026, 7, 1), "note": "電話連絡済み"})
+    assert updated.last_contacted_at == date(2026, 7, 1)
+    assert updated.note == "電話連絡済み"

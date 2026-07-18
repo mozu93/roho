@@ -88,3 +88,37 @@ class RenewalService:
             _ = renewal.items
             session.expunge_all()
             return renewal
+
+    def update(self, renewal_id: int, items_data: dict, renewal_data: dict) -> AnnualRenewal:
+        with get_session(self._engine) as session:
+            renewal = session.get(AnnualRenewal, renewal_id)
+            if not renewal:
+                raise ValueError(f"年度更新レコードID {renewal_id} が見つかりません。")
+
+            for item in renewal.items:
+                data = items_data.get(item.branch_type)
+                if not data:
+                    continue
+                new_status = data["submission_status"]
+                confirmed_at = data.get("confirmed_at")
+                if confirmed_at is None and new_status == "提出済":
+                    confirmed_at = date.today()
+                item.submission_status = new_status
+                item.confirmed_at = confirmed_at
+
+            manual = renewal_data.get("overall_status_manual", False)
+            renewal.overall_status_manual = manual
+            if manual:
+                renewal.overall_status = renewal_data["overall_status"]
+            else:
+                renewal.overall_status = compute_overall_status(
+                    [i.submission_status for i in renewal.items])
+
+            renewal.last_contacted_at = renewal_data.get("last_contacted_at")
+            renewal.note = renewal_data.get("note", "")
+            renewal.updated_at = datetime.now()
+            session.flush()
+            _ = renewal.member
+            _ = renewal.items
+            session.expunge_all()
+            return renewal
