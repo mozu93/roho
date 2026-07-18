@@ -111,9 +111,13 @@ class FeeEditDialog(QDialog):
         pyfl = QFormLayout(payment_group)
         self._f_lump_sum = QCheckBox("保険料を一括で支払う事業所")
         self._f_lump_sum.toggled.connect(self._recalculate)
+        self._f_has_entrust_month = QCheckBox("委託開始年月あり")
         self._f_entrust_month = QDateEdit()
         self._f_entrust_month.setCalendarPopup(True)
         self._f_entrust_month.setDisplayFormat("yyyy-MM-dd")
+        self._f_entrust_month.setEnabled(False)
+        self._f_has_entrust_month.toggled.connect(self._f_entrust_month.setEnabled)
+        self._f_has_entrust_month.toggled.connect(self._recalculate)
         self._f_entrust_month.dateChanged.connect(self._recalculate)
         self._r_auto_period = QLabel("-")
         self._f_final_period = QComboBox()
@@ -123,6 +127,7 @@ class FeeEditDialog(QDialog):
         self._f_payment_method = QComboBox()
         self._f_payment_method.addItems(PAYMENT_METHODS)
         pyfl.addRow(self._f_lump_sum)
+        pyfl.addRow(self._f_has_entrust_month)
         pyfl.addRow("委託開始年月", self._f_entrust_month)
         pyfl.addRow("自動判定支払時期", self._r_auto_period)
         pyfl.addRow("確定支払時期", self._f_final_period)
@@ -141,6 +146,7 @@ class FeeEditDialog(QDialog):
         self._f_has_paid.toggled.connect(self._f_paid_at.setEnabled)
         self._f_reminder_status = QComboBox()
         self._f_reminder_status.addItems(REMINDER_STATUSES)
+        self._f_has_paid.toggled.connect(self._on_has_paid_toggled)
         self._f_note = QTextEdit()
         self._f_note.setFixedHeight(60)
         payfl.addRow("入金額", self._f_paid_amount)
@@ -178,9 +184,12 @@ class FeeEditDialog(QDialog):
 
         self._f_lump_sum.setChecked(r.is_lump_sum_payment)
         if r.entrust_start_month:
+            self._f_has_entrust_month.setChecked(True)
             self._f_entrust_month.setDate(QDate(
                 r.entrust_start_month.year, r.entrust_start_month.month,
                 r.entrust_start_month.day))
+        else:
+            self._f_has_entrust_month.setChecked(False)
         idx = self._f_final_period.findText(r.final_payment_period or "2期")
         self._f_final_period.setCurrentIndex(idx if idx >= 0 else 1)
         self._f_period_reason.setText(r.payment_period_override_reason or "")
@@ -189,9 +198,11 @@ class FeeEditDialog(QDialog):
             self._f_payment_method.setCurrentIndex(idx)
 
         self._f_paid_amount.setText(str(r.paid_amount) if r.paid_amount else "")
+        self._f_has_paid.blockSignals(True)
         if r.paid_at:
             self._f_has_paid.setChecked(True)
             self._f_paid_at.setDate(QDate(r.paid_at.year, r.paid_at.month, r.paid_at.day))
+        self._f_has_paid.blockSignals(False)
         idx = self._f_reminder_status.findText(r.reminder_status or "未督促")
         self._f_reminder_status.setCurrentIndex(idx if idx >= 0 else 0)
         self._f_note.setPlainText(r.note or "")
@@ -217,11 +228,19 @@ class FeeEditDialog(QDialog):
         self._r_tax.setText(f"{calc['tax_amount']:,}円")
         self._r_total.setText(f"{calc['total_amount']:,}円")
 
-        qd = self._f_entrust_month.date()
-        entrust = date(qd.year(), qd.month(), qd.day())
+        entrust = None
+        if self._f_has_entrust_month.isChecked():
+            qd = self._f_entrust_month.date()
+            entrust = date(qd.year(), qd.month(), qd.day())
         auto_period = determine_payment_period(
             self._record.fiscal_year, self._f_lump_sum.isChecked(), entrust)
         self._r_auto_period.setText(auto_period)
+
+    def _on_has_paid_toggled(self, checked: bool):
+        if checked:
+            idx = self._f_reminder_status.findText("完了")
+            if idx >= 0:
+                self._f_reminder_status.setCurrentIndex(idx)
 
     def _on_save(self):
         is_member = self._f_is_member.currentData() if self._f_override.isChecked() \
@@ -231,8 +250,10 @@ class FeeEditDialog(QDialog):
             QMessageBox.warning(self, "入力エラー", "会員区分の上書き理由を入力してください。")
             return
 
-        qd = self._f_entrust_month.date()
-        entrust = date(qd.year(), qd.month(), qd.day())
+        entrust = None
+        if self._f_has_entrust_month.isChecked():
+            qd = self._f_entrust_month.date()
+            entrust = date(qd.year(), qd.month(), qd.day())
 
         paid_amount_text = self._f_paid_amount.text().strip()
         paid_amount = int(paid_amount_text) if paid_amount_text else None

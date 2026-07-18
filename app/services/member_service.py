@@ -3,7 +3,7 @@ from datetime import datetime
 from sqlalchemy import func
 from app.database.connection import get_session
 from app.database.models import (
-    Member, InsuranceEntry, MemberChange, ChangeConfirmation, Staff,
+    Member, InsuranceEntry, MemberChange, ChangeConfirmation, Staff, AnnualFeeRecord,
 )
 
 INS_TYPES = ["ippan", "kensetsu_koyou", "ringyo", "kensetsu_genba", "kensetsu_jimusho"]
@@ -153,6 +153,7 @@ class MemberService:
             m = session.get(Member, member_id)
             if not m:
                 return
+            session.query(AnnualFeeRecord).filter_by(member_id=member_id).delete()
             for change in list(m.member_changes):
                 session.delete(change)   # ChangeConfirmation は cascade
             for log in list(m.activity_logs):

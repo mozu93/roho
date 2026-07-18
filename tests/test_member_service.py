@@ -1,6 +1,6 @@
 import pytest
 from sqlalchemy import create_engine
-from app.database.models import Base, Staff
+from app.database.models import Base, Staff, AnnualFeeRecord
 from app.database.connection import get_session
 from app.services.member_service import MemberService
 
@@ -123,3 +123,20 @@ def test_search_inactive_only(svc):
     results = svc.search(inactive_only=True)
     assert len(results) == 1
     assert results[0].member_number == "9001"
+
+
+def test_delete_removes_annual_fee_records(svc, engine):
+    m = svc.create({"member_number": "9001", "org_name": "㈱テスト商事", "insurance_entries": []}, "山田")
+    with get_session(engine) as s:
+        s.add(AnnualFeeRecord(
+            fiscal_year=2026,
+            member_id=m.id,
+            is_member_for_fee=True,
+            auto_payment_period="2期",
+            final_payment_period="2期",
+        ))
+
+    svc.delete(m.id)
+
+    with get_session(engine) as s:
+        assert s.query(AnnualFeeRecord).filter_by(member_id=m.id).count() == 0
