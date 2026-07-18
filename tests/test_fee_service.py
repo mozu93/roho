@@ -1,7 +1,7 @@
 import pytest
 from datetime import date
 from sqlalchemy import create_engine
-from app.database.models import Base, Member, AnnualFeeRule
+from app.database.models import Base, Member, AnnualFeeRule, AnnualFeeRecord
 from app.database.connection import get_session
 from app.services.fee_service import calculate_fee, determine_payment_period, FeeService
 
@@ -147,3 +147,35 @@ def test_list_years_descending(svc):
     svc.get_or_create_rule(2026)
     svc.get_or_create_rule(2024)
     assert svc.list_years() == [2026, 2025, 2024]
+
+
+def test_generate_records_creates_for_active_members(svc):
+    with get_session(svc._engine) as session:
+        session.add(Member(member_number="9001", org_name="A社", is_active=True, is_member=True))
+        session.add(Member(member_number="9002", org_name="B社", is_active=True, is_member=False))
+        session.add(Member(member_number="9003", org_name="C社", is_active=False, is_member=True))
+    added = svc.generate_records(2026)
+    assert added == 2  # 委託中の2件のみ
+    with get_session(svc._engine) as session:
+        records = session.query(AnnualFeeRecord).filter_by(fiscal_year=2026).all()
+        assert len(records) == 2
+
+
+def test_generate_records_skips_existing(svc):
+    with get_session(svc._engine) as session:
+        session.add(Member(member_number="9001", org_name="A社", is_active=True, is_member=True))
+    svc.generate_records(2026)
+    added_second = svc.generate_records(2026)
+    assert added_second == 0
+
+
+def test_generate_records_copies_is_member_and_computes_zero_fee(svc):
+    with get_session(svc._engine) as session:
+        session.add(Member(member_number="9001", org_name="A社", is_active=True, is_member=False))
+    svc.generate_records(2026)
+    with get_session(svc._engine) as session:
+        record = session.query(AnnualFeeRecord).filter_by(fiscal_year=2026).first()
+        assert record.is_member_for_fee is False
+        assert record.premium_total == 0
+        assert record.fee_without_tax == 14000  # 非会員・0円例外ルール
+        assert record.auto_payment_period == "2期"  # 委託開始月未設定は既存扱い

@@ -1,7 +1,7 @@
 import math
 from datetime import date, datetime
 from app.database.connection import get_session
-from app.database.models import AnnualFeeRule
+from app.database.models import AnnualFeeRule, AnnualFeeRecord, Member
 
 BRANCH_KEYS = ("branch_0", "branch_2", "branch_4", "branch_5", "branch_6")
 PAYMENT_METHODS = ["口座振替", "振込", "持参"]
@@ -98,3 +98,33 @@ class FeeService:
             session.flush()
             session.expunge(rule)
             return rule
+
+    def generate_records(self, fiscal_year: int) -> int:
+        """名簿の委託中事業所から、当該年度にまだレコードがない分だけ追加する。"""
+        rule = self.get_or_create_rule(fiscal_year)
+        zero_premiums = {k: 0 for k in BRANCH_KEYS}
+        with get_session(self._engine) as session:
+            existing_ids = {
+                r[0] for r in session.query(AnnualFeeRecord.member_id)
+                .filter(AnnualFeeRecord.fiscal_year == fiscal_year).all()
+            }
+            members = session.query(Member).filter(Member.is_active == True).all()
+            added = 0
+            for m in members:
+                if m.id in existing_ids:
+                    continue
+                calc = calculate_fee(zero_premiums, m.is_member, rule)
+                period = determine_payment_period(fiscal_year, False, m.registered_date)
+                session.add(AnnualFeeRecord(
+                    fiscal_year=fiscal_year,
+                    member_id=m.id,
+                    is_member_for_fee=m.is_member,
+                    entrust_start_month=m.registered_date,
+                    is_lump_sum_payment=False,
+                    auto_payment_period=period,
+                    final_payment_period=period,
+                    reminder_status="未督促",
+                    **calc,
+                ))
+                added += 1
+            return added
