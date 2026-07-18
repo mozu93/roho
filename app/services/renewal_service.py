@@ -65,3 +65,26 @@ class RenewalService:
                     ))
                 added += 1
             return added
+
+    def get(self, renewal_id: int):
+        with get_session(self._engine) as session:
+            renewal = session.get(AnnualRenewal, renewal_id)
+            if not renewal:
+                return None
+            member = session.get(Member, renewal.member_id)
+            existing_types = {i.branch_type for i in renewal.items}
+            member_types = {e.ins_type for e in member.insurance_entries}
+            missing = member_types - existing_types
+            if missing:
+                for branch_type in missing:
+                    session.add(AnnualRenewalItem(
+                        annual_renewal_id=renewal.id,
+                        branch_type=branch_type,
+                        submission_status="未提出",
+                    ))
+                session.flush()
+                session.refresh(renewal, attribute_names=["items"])
+            _ = renewal.member
+            _ = renewal.items
+            session.expunge_all()
+            return renewal

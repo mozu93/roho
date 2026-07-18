@@ -91,3 +91,56 @@ def test_list_years_distinct_descending(svc):
     svc.generate_records(2025)
     svc.generate_records(2026)
     assert svc.list_years() == [2026, 2025]
+
+
+def test_get_returns_renewal_with_items(svc):
+    with get_session(svc._engine) as session:
+        m = Member(member_number="9001", org_name="A社", is_active=True, is_member=True)
+        session.add(m)
+        session.flush()
+        session.add(InsuranceEntry(member_id=m.id, ins_type="ippan", branch_number="0"))
+    svc.generate_records(2026)
+    with get_session(svc._engine) as session:
+        renewal_id = session.query(AnnualRenewal).filter_by(fiscal_year=2026).first().id
+
+    renewal = svc.get(renewal_id)
+    assert renewal.member.org_name == "A社"
+    assert len(renewal.items) == 1
+
+
+def test_get_backfills_newly_added_branch(svc):
+    with get_session(svc._engine) as session:
+        m = Member(member_number="9001", org_name="A社", is_active=True, is_member=True)
+        session.add(m)
+        session.flush()
+        session.add(InsuranceEntry(member_id=m.id, ins_type="ippan", branch_number="0"))
+        member_id = m.id
+    svc.generate_records(2026)
+    with get_session(svc._engine) as session:
+        renewal_id = session.query(AnnualRenewal).filter_by(fiscal_year=2026).first().id
+
+    # 生成後に枝番を追加（後発の委託拡大を想定）
+    with get_session(svc._engine) as session:
+        session.add(InsuranceEntry(member_id=member_id, ins_type="kensetsu_koyou", branch_number="2"))
+
+    renewal = svc.get(renewal_id)
+    assert {i.branch_type for i in renewal.items} == {"ippan", "kensetsu_koyou"}
+    new_item = next(i for i in renewal.items if i.branch_type == "kensetsu_koyou")
+    assert new_item.submission_status == "未提出"
+
+
+def test_get_does_not_duplicate_existing_items(svc):
+    with get_session(svc._engine) as session:
+        m = Member(member_number="9001", org_name="A社", is_active=True, is_member=True)
+        session.add(m)
+        session.flush()
+        session.add(InsuranceEntry(member_id=m.id, ins_type="ippan", branch_number="0"))
+    svc.generate_records(2026)
+    with get_session(svc._engine) as session:
+        renewal_id = session.query(AnnualRenewal).filter_by(fiscal_year=2026).first().id
+
+    svc.get(renewal_id)
+    svc.get(renewal_id)  # 2回呼んでも重複しない
+    with get_session(svc._engine) as session:
+        count = session.query(AnnualRenewalItem).filter_by(annual_renewal_id=renewal_id).count()
+        assert count == 1
