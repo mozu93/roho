@@ -128,3 +128,85 @@ class FeeService:
                 ))
                 added += 1
             return added
+
+    _UPDATABLE_FIELDS = (
+        "is_member_for_fee", "member_override_reason",
+        "premium_branch_0", "premium_branch_2", "premium_branch_4",
+        "premium_branch_5", "premium_branch_6",
+        "is_lump_sum_payment", "entrust_start_month",
+        "final_payment_period", "payment_period_override_reason",
+        "payment_method", "paid_amount", "paid_at",
+        "reminder_status", "note",
+    )
+
+    def get(self, record_id: int):
+        with get_session(self._engine) as session:
+            record = session.get(AnnualFeeRecord, record_id)
+            if record:
+                _ = record.member
+                session.expunge_all()
+            return record
+
+    def update(self, record_id: int, data: dict) -> AnnualFeeRecord:
+        with get_session(self._engine) as session:
+            record = session.get(AnnualFeeRecord, record_id)
+            if not record:
+                raise ValueError(f"手数料レコードID {record_id} が見つかりません。")
+            member = session.get(Member, record.member_id)
+
+            new_is_member = data.get("is_member_for_fee", record.is_member_for_fee)
+            new_reason = data.get("member_override_reason", record.member_override_reason)
+            if new_is_member != member.is_member and not new_reason:
+                raise ValueError("会員区分を名簿と異なる値へ変更する場合は理由の入力が必須です。")
+
+            for field in self._UPDATABLE_FIELDS:
+                if field in data:
+                    setattr(record, field, data[field])
+
+            rule = session.get(AnnualFeeRule, record.fiscal_year)
+            premiums = {
+                "branch_0": record.premium_branch_0, "branch_2": record.premium_branch_2,
+                "branch_4": record.premium_branch_4, "branch_5": record.premium_branch_5,
+                "branch_6": record.premium_branch_6,
+            }
+            calc = calculate_fee(premiums, record.is_member_for_fee, rule)
+            for k, v in calc.items():
+                setattr(record, k, v)
+
+            record.auto_payment_period = determine_payment_period(
+                record.fiscal_year, record.is_lump_sum_payment, record.entrust_start_month)
+            if "final_payment_period" not in data:
+                record.final_payment_period = record.auto_payment_period
+            elif record.final_payment_period != record.auto_payment_period \
+                    and not record.payment_period_override_reason:
+                raise ValueError("支払時期を自動判定と異なる値へ変更する場合は理由の入力が必須です。")
+
+            if "paid_at" in data and data["paid_at"] and "reminder_status" not in data:
+                record.reminder_status = "完了"
+
+            record.updated_at = datetime.now()
+            session.flush()
+            _ = record.member
+            session.expunge_all()
+            return record
+
+    def recalculate_all(self, fiscal_year: int) -> int:
+        rule = self.get_or_create_rule(fiscal_year)
+        with get_session(self._engine) as session:
+            records = session.query(AnnualFeeRecord).filter(
+                AnnualFeeRecord.fiscal_year == fiscal_year).all()
+            for record in records:
+                premiums = {
+                    "branch_0": record.premium_branch_0, "branch_2": record.premium_branch_2,
+                    "branch_4": record.premium_branch_4, "branch_5": record.premium_branch_5,
+                    "branch_6": record.premium_branch_6,
+                }
+                calc = calculate_fee(premiums, record.is_member_for_fee, rule)
+                for k, v in calc.items():
+                    setattr(record, k, v)
+                record.auto_payment_period = determine_payment_period(
+                    fiscal_year, record.is_lump_sum_payment, record.entrust_start_month)
+                if not record.payment_period_override_reason:
+                    record.final_payment_period = record.auto_payment_period
+                record.updated_at = datetime.now()
+            return len(records)

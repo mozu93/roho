@@ -179,3 +179,84 @@ def test_generate_records_copies_is_member_and_computes_zero_fee(svc):
         assert record.premium_total == 0
         assert record.fee_without_tax == 14000  # 非会員・0円例外ルール
         assert record.auto_payment_period == "2期"  # 委託開始月未設定は既存扱い
+
+
+def test_update_recalculates_fee(svc):
+    with get_session(svc._engine) as session:
+        session.add(Member(member_number="9001", org_name="A社", is_active=True, is_member=True))
+    svc.generate_records(2026)
+    with get_session(svc._engine) as session:
+        record_id = session.query(AnnualFeeRecord).filter_by(fiscal_year=2026).first().id
+
+    updated = svc.update(record_id, {
+        "premium_branch_0": 200000,
+        "is_member_for_fee": True,
+        "is_lump_sum_payment": False,
+        "entrust_start_month": None,
+        "payment_method": "振込",
+    })
+    assert updated.premium_total == 200000
+    assert updated.fee_without_tax == 10000
+    assert updated.total_amount == 11000
+
+
+def test_update_requires_reason_for_member_override(svc):
+    with get_session(svc._engine) as session:
+        session.add(Member(member_number="9001", org_name="A社", is_active=True, is_member=True))
+    svc.generate_records(2026)
+    with get_session(svc._engine) as session:
+        record_id = session.query(AnnualFeeRecord).filter_by(fiscal_year=2026).first().id
+
+    with pytest.raises(ValueError):
+        svc.update(record_id, {"is_member_for_fee": False})  # 理由なし → エラー
+
+    updated = svc.update(record_id, {
+        "is_member_for_fee": False, "member_override_reason": "特例対応のため",
+    })
+    assert updated.is_member_for_fee is False
+
+
+def test_update_requires_reason_for_payment_period_override(svc):
+    with get_session(svc._engine) as session:
+        session.add(Member(member_number="9001", org_name="A社", is_active=True, is_member=True))
+    svc.generate_records(2026)
+    with get_session(svc._engine) as session:
+        record_id = session.query(AnnualFeeRecord).filter_by(fiscal_year=2026).first().id
+
+    with pytest.raises(ValueError):
+        svc.update(record_id, {"final_payment_period": "1期"})  # 自動判定(2期)と異なるが理由なし
+
+    updated = svc.update(record_id, {
+        "final_payment_period": "1期", "payment_period_override_reason": "事業所希望のため",
+    })
+    assert updated.final_payment_period == "1期"
+
+
+def test_update_sets_reminder_completed_when_paid(svc):
+    with get_session(svc._engine) as session:
+        session.add(Member(member_number="9001", org_name="A社", is_active=True, is_member=True))
+    svc.generate_records(2026)
+    with get_session(svc._engine) as session:
+        record_id = session.query(AnnualFeeRecord).filter_by(fiscal_year=2026).first().id
+
+    updated = svc.update(record_id, {"paid_amount": 5500, "paid_at": date(2026, 8, 1)})
+    assert updated.reminder_status == "完了"
+
+
+def test_recalculate_all_applies_new_rule(svc):
+    with get_session(svc._engine) as session:
+        session.add(Member(member_number="9001", org_name="A社", is_active=True, is_member=True))
+    svc.generate_records(2026)
+    with get_session(svc._engine) as session:
+        record_id = session.query(AnnualFeeRecord).filter_by(fiscal_year=2026).first().id
+    svc.update(record_id, {"premium_branch_0": 80000})
+
+    with get_session(svc._engine) as session:
+        rule = session.get(AnnualFeeRule, 2026)
+        rule.member_min_fee = 6000
+
+    count = svc.recalculate_all(2026)
+    assert count == 1
+    with get_session(svc._engine) as session:
+        record = session.get(AnnualFeeRecord, record_id)
+        assert record.fee_without_tax == 6000
