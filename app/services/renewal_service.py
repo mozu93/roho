@@ -122,3 +122,25 @@ class RenewalService:
             _ = renewal.items
             session.expunge_all()
             return renewal
+
+    def search(self, fiscal_year: int, keyword: str = "", status_filter: str = None) -> list:
+        with get_session(self._engine) as session:
+            q = (
+                session.query(AnnualRenewal)
+                .join(Member, AnnualRenewal.member_id == Member.id)
+                .filter(AnnualRenewal.fiscal_year == fiscal_year)
+            )
+            if keyword:
+                kw = f"%{keyword}%"
+                cond = Member.org_name.like(kw) | Member.member_number.like(kw)
+                if keyword.isdigit():
+                    cond = cond | (Member.company_code == int(keyword))
+                q = q.filter(cond)
+            if status_filter:
+                q = q.filter(AnnualRenewal.overall_status == status_filter)
+
+            records = q.order_by(Member.member_number).all()
+            for r in records:
+                _ = r.member
+            session.expunge_all()
+            return records

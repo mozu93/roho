@@ -196,3 +196,35 @@ def test_update_saves_note_and_last_contacted(svc):
         "last_contacted_at": date(2026, 7, 1), "note": "電話連絡済み"})
     assert updated.last_contacted_at == date(2026, 7, 1)
     assert updated.note == "電話連絡済み"
+
+
+def test_search_by_keyword(svc):
+    with get_session(svc._engine) as session:
+        session.add(Member(member_number="9001", org_name="㈱テスト商事", is_active=True, is_member=True))
+        session.add(Member(member_number="9002", org_name="△△建設", is_active=True, is_member=True))
+    svc.generate_records(2026)
+    results = svc.search(2026, keyword="テスト")
+    assert len(results) == 1
+    assert results[0].member.org_name == "㈱テスト商事"
+
+
+def test_search_filter_by_overall_status(svc):
+    with get_session(svc._engine) as session:
+        m1 = Member(member_number="9001", org_name="A社", is_active=True, is_member=True)
+        m2 = Member(member_number="9002", org_name="B社", is_active=True, is_member=True)
+        session.add_all([m1, m2])
+        session.flush()
+        session.add(InsuranceEntry(member_id=m1.id, ins_type="ippan", branch_number="0"))
+        session.add(InsuranceEntry(member_id=m2.id, ins_type="ippan", branch_number="0"))
+    svc.generate_records(2026)
+    with get_session(svc._engine) as session:
+        renewal_id = (
+            session.query(AnnualRenewal).filter_by(fiscal_year=2026)
+            .join(Member).filter(Member.org_name == "A社").first().id
+        )
+    svc.update(renewal_id, {"ippan": {"submission_status": "提出済", "confirmed_at": None}},
+               {"overall_status_manual": False, "overall_status": None,
+                "last_contacted_at": None, "note": ""})
+    results = svc.search(2026, status_filter="提出済")
+    assert len(results) == 1
+    assert results[0].member.org_name == "A社"
