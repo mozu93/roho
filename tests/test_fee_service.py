@@ -1,7 +1,21 @@
 import pytest
 from datetime import date
-from app.database.models import AnnualFeeRule
-from app.services.fee_service import calculate_fee, determine_payment_period
+from sqlalchemy import create_engine
+from app.database.models import Base, Member, AnnualFeeRule
+from app.database.connection import get_session
+from app.services.fee_service import calculate_fee, determine_payment_period, FeeService
+
+
+@pytest.fixture
+def engine():
+    eng = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(eng)
+    return eng
+
+
+@pytest.fixture
+def svc(engine):
+    return FeeService(engine)
 
 
 def _rule(fiscal_year=2026):
@@ -100,3 +114,36 @@ def test_determine_payment_period_old_entrust_defaults_to_2ki():
     # 委託開始が年度範囲(2026-04-01〜2027-03-31)より前 → 既存事業所扱いで2期
     result = determine_payment_period(2026, False, date(2020, 6, 1))
     assert result == "2期"
+
+
+def test_get_or_create_rule_creates_default(svc):
+    rule = svc.get_or_create_rule(2026)
+    assert rule.fiscal_year == 2026
+    assert rule.fee_rate == 0.05
+    assert rule.member_min_fee == 5000
+
+
+def test_get_or_create_rule_returns_existing(svc):
+    first = svc.get_or_create_rule(2026)
+    with get_session(svc._engine) as session:
+        r = session.get(AnnualFeeRule, 2026)
+        r.member_min_fee = 6000
+    second = svc.get_or_create_rule(2026)
+    assert second.member_min_fee == 6000
+
+
+def test_get_or_create_rule_copies_previous_year(svc):
+    with get_session(svc._engine) as session:
+        session.add(AnnualFeeRule(fiscal_year=2025, fee_rate=0.05,
+                                   member_min_fee=4500, non_member_addition=13000,
+                                   tax_rate=0.10))
+    rule = svc.get_or_create_rule(2026)
+    assert rule.member_min_fee == 4500
+    assert rule.non_member_addition == 13000
+
+
+def test_list_years_descending(svc):
+    svc.get_or_create_rule(2025)
+    svc.get_or_create_rule(2026)
+    svc.get_or_create_rule(2024)
+    assert svc.list_years() == [2026, 2025, 2024]

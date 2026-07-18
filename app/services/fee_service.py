@@ -1,5 +1,6 @@
 import math
 from datetime import date, datetime
+from app.database.connection import get_session
 from app.database.models import AnnualFeeRule
 
 BRANCH_KEYS = ("branch_0", "branch_2", "branch_4", "branch_5", "branch_6")
@@ -57,3 +58,43 @@ def determine_payment_period(fiscal_year: int, is_lump_sum_payment: bool,
                 return "3期"
             return "請求なし"
     return "2期"
+
+
+class FeeService:
+    def __init__(self, engine):
+        self._engine = engine
+
+    def list_years(self) -> list:
+        with get_session(self._engine) as session:
+            rows = (
+                session.query(AnnualFeeRule.fiscal_year)
+                .order_by(AnnualFeeRule.fiscal_year.desc())
+                .all()
+            )
+            return [r[0] for r in rows]
+
+    def get_or_create_rule(self, fiscal_year: int) -> AnnualFeeRule:
+        with get_session(self._engine) as session:
+            rule = session.get(AnnualFeeRule, fiscal_year)
+            if rule:
+                session.expunge(rule)
+                return rule
+            prev = (
+                session.query(AnnualFeeRule)
+                .filter(AnnualFeeRule.fiscal_year < fiscal_year)
+                .order_by(AnnualFeeRule.fiscal_year.desc())
+                .first()
+            )
+            if prev:
+                rule = AnnualFeeRule(
+                    fiscal_year=fiscal_year, fee_rate=prev.fee_rate,
+                    member_min_fee=prev.member_min_fee,
+                    non_member_addition=prev.non_member_addition,
+                    tax_rate=prev.tax_rate,
+                )
+            else:
+                rule = AnnualFeeRule(fiscal_year=fiscal_year)
+            session.add(rule)
+            session.flush()
+            session.expunge(rule)
+            return rule
