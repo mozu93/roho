@@ -823,7 +823,7 @@ class MemberTab(QWidget):
         self._rebuild_member_row_map()
         if logical_col >= 0:
             self._set_staff_setting("sort_column", logical_col)
-            self._set_staff_setting("sort_order", int(order))
+            self._set_staff_setting("sort_order", order.value)
 
     def _on_frozen_clicked(self, index):
         """固定オーバーレイのクリック処理"""
