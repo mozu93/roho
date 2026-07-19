@@ -45,6 +45,23 @@ class RenewalTab(QWidget):
         self._build_ui()
         self._refresh_years()
 
+    # ── per-staff 設定ヘルパー ──
+
+    def _get_staff_setting(self, key: str, default=None):
+        name = self._config.last_staff_name
+        return self._config.staff_settings.get(name, {}).get(key, default)
+
+    def _set_staff_setting(self, key: str, value) -> None:
+        name = self._config.last_staff_name
+        if name not in self._config.staff_settings:
+            self._config.staff_settings[name] = {}
+        self._config.staff_settings[name][key] = value
+        if self._config_path:
+            try:
+                self._config.save(self._config_path)
+            except Exception as e:
+                print(f"Failed to save staff settings: {e}")
+
     def _build_ui(self):
         layout = QVBoxLayout(self)
 
@@ -82,7 +99,9 @@ class RenewalTab(QWidget):
         self._table.setHorizontalHeaderLabels(COLS)
         self._table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self._table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        self._table.setSortingEnabled(True)
         self._table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
+        self._table.horizontalHeader().sortIndicatorChanged.connect(self._on_sort_changed)
         for i, ins_type in enumerate(INS_TYPES):
             col = BRANCH_COL_START + i
             self._table.setColumnWidth(col, 110)
@@ -117,9 +136,16 @@ class RenewalTab(QWidget):
         member_ids = [r.member.id for r in records]
         self._last_activity_map = self._activity_svc.get_last_logged_at_map(member_ids)
         self._last_change_map = self._activity_svc.get_last_changed_at_map(member_ids)
+        self._table.setSortingEnabled(False)
         self._table.setRowCount(len(records))
         for row, r in enumerate(records):
             self._populate_row(row, r)
+        saved_col = self._get_staff_setting("renewal_sort_column", -1)
+        saved_ord = Qt.SortOrder(self._get_staff_setting(
+            "renewal_sort_order", Qt.SortOrder.AscendingOrder.value))
+        self._table.setSortingEnabled(True)
+        if saved_col >= 0:
+            self._table.horizontalHeader().setSortIndicator(saved_col, saved_ord)
 
     def _populate_row(self, row, r):
         m = r.member
@@ -204,6 +230,11 @@ class RenewalTab(QWidget):
         self._table.setItem(row, _TAIL_START + 7, SortableTableWidgetItem(
             r.last_contacted_at.strftime("%Y-%m-%d") if r.last_contacted_at else ""))
         self._table.setItem(row, _TAIL_START + 8, SortableTableWidgetItem((r.note or "")[:30]))
+
+    def _on_sort_changed(self, logical_col: int, order):
+        if logical_col >= 0:
+            self._set_staff_setting("renewal_sort_column", logical_col)
+            self._set_staff_setting("renewal_sort_order", order.value)
 
     def _on_cell_clicked(self, row, col):
         if col < BRANCH_COL_START or col >= BRANCH_COL_START + len(INS_TYPES):
