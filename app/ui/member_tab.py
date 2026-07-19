@@ -192,6 +192,18 @@ _COL_MEMBER_NUMBER = 3
 _COL_ORG_NAME = 4
 
 
+def _aggregate_sort_key(m):
+    """事業所が保有する枝番の保険番号を優先順位付き複数キーとして返す（数値は数値として比較）"""
+    def _ins_key(ins_type):
+        entry = next((e for e in m.insurance_entries if e.ins_type == ins_type), None)
+        val = entry.ins_number if entry else ""
+        try:
+            return (0, int(val))
+        except (ValueError, TypeError):
+            return (1, val or "")
+    return tuple(_ins_key(t) for t in INS_TYPES)
+
+
 class MemberTab(QWidget):
     jump_to_withdrawn = pyqtSignal(int)  # 委託解除タブへ移動リクエスト
 
@@ -492,6 +504,8 @@ class MemberTab(QWidget):
             keyword=self._keyword_edit.text(),
             active_only=True,
         )
+        if self._get_staff_setting("aggregate_sort_active", False):
+            members.sort(key=_aggregate_sort_key)
         self._members = members
         member_ids = [m.id for m in members]
         self._last_activity_map = self._activity_svc.get_last_logged_at_map(member_ids)
@@ -605,9 +619,13 @@ class MemberTab(QWidget):
             last_item.setTextAlignment(_ac)
             self._table.setItem(row, 29, last_item)
             self._table.setItem(row, 30, SortableTableWidgetItem(m.note or ""))
-        saved_col = self._get_staff_setting("sort_column", -1)
-        saved_ord = Qt.SortOrder(self._get_staff_setting("sort_order", Qt.SortOrder.AscendingOrder.value))
-        self._table.horizontalHeader().setSortIndicator(saved_col, saved_ord)
+        if not self._get_staff_setting("aggregate_sort_active", False):
+            saved_col = self._get_staff_setting("sort_column", -1)
+            saved_ord = Qt.SortOrder(self._get_staff_setting(
+                "sort_order", Qt.SortOrder.AscendingOrder.value))
+            self._resizing_programmatically = True
+            self._table.horizontalHeader().setSortIndicator(saved_col, saved_ord)
+            self._resizing_programmatically = False
         self._table.setSortingEnabled(True)
         self._rebuild_member_row_map()
         self._resizing_programmatically = True
@@ -640,21 +658,8 @@ class MemberTab(QWidget):
         self._frozen_view.viewport().update()
 
     def _on_aggregate_sort(self):
-        def _ins_key(m, ins_type):
-            entry = next((e for e in m.insurance_entries if e.ins_type == ins_type), None)
-            val = entry.ins_number if entry else ""
-            try:
-                return (0, int(val))
-            except (ValueError, TypeError):
-                return (1, val or "")
-
-        self._members.sort(key=lambda m: (
-            _ins_key(m, "ippan"),
-            _ins_key(m, "kensetsu_koyou"),
-            _ins_key(m, "ringyo"),
-            _ins_key(m, "kensetsu_genba"),
-            _ins_key(m, "kensetsu_jimusho"),
-        ))
+        self._members.sort(key=_aggregate_sort_key)
+        self._set_staff_setting("aggregate_sort_active", True)
         self._fill_table(self._members)
 
     def _on_select_tokubetsu(self):
@@ -821,9 +826,10 @@ class MemberTab(QWidget):
         """メインヘッダーでのソート変更を固定ビューのインジケーターに反映する"""
         self._frozen_view.horizontalHeader().setSortIndicator(logical_col, order)
         self._rebuild_member_row_map()
-        if logical_col >= 0:
+        if not self._resizing_programmatically and logical_col >= 0:
             self._set_staff_setting("sort_column", logical_col)
             self._set_staff_setting("sort_order", order.value)
+            self._set_staff_setting("aggregate_sort_active", False)
 
     def _on_frozen_clicked(self, index):
         """固定オーバーレイのクリック処理"""
