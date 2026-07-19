@@ -241,3 +241,57 @@ def test_search_results_have_items_loaded(svc):
     assert len(results) == 1
     assert len(results[0].items) == 1
     assert results[0].items[0].branch_type == "ippan"
+
+
+def test_toggle_item_marks_submitted_with_today(svc):
+    renewal_id = _setup_renewal(svc, ins_types=("ippan",))
+    updated = svc.toggle_item(renewal_id, "ippan")
+    item = next(i for i in updated.items if i.branch_type == "ippan")
+    assert item.submission_status == "提出済"
+    assert item.confirmed_at == date.today()
+
+
+def test_toggle_item_reverts_and_clears_confirmed_at(svc):
+    renewal_id = _setup_renewal(svc, ins_types=("ippan",))
+    svc.toggle_item(renewal_id, "ippan")
+    updated = svc.toggle_item(renewal_id, "ippan")
+    item = next(i for i in updated.items if i.branch_type == "ippan")
+    assert item.submission_status == "未提出"
+    assert item.confirmed_at is None
+
+
+def test_toggle_item_noop_when_deficient(svc):
+    renewal_id = _setup_renewal(svc, ins_types=("ippan",))
+    svc.update(renewal_id, {"ippan": {"submission_status": "不備あり", "confirmed_at": None}},
+               {"overall_status_manual": False, "overall_status": None,
+                "last_contacted_at": None, "note": ""})
+    updated = svc.toggle_item(renewal_id, "ippan")
+    item = next(i for i in updated.items if i.branch_type == "ippan")
+    assert item.submission_status == "不備あり"
+    assert item.confirmed_at is None
+
+
+def test_toggle_item_noop_when_not_applicable(svc):
+    renewal_id = _setup_renewal(svc, ins_types=("ippan",))
+    svc.update(renewal_id, {"ippan": {"submission_status": "対象外", "confirmed_at": None}},
+               {"overall_status_manual": False, "overall_status": None,
+                "last_contacted_at": None, "note": ""})
+    updated = svc.toggle_item(renewal_id, "ippan")
+    item = next(i for i in updated.items if i.branch_type == "ippan")
+    assert item.submission_status == "対象外"
+
+
+def test_toggle_item_respects_manual_overall_status(svc):
+    renewal_id = _setup_renewal(svc, ins_types=("ippan",))
+    svc.update(renewal_id, {"ippan": {"submission_status": "未提出", "confirmed_at": None}},
+               {"overall_status_manual": True, "overall_status": "完了",
+                "last_contacted_at": None, "note": ""})
+    updated = svc.toggle_item(renewal_id, "ippan")
+    assert updated.overall_status == "完了"
+
+
+def test_toggle_item_recomputes_overall_status(svc):
+    renewal_id = _setup_renewal(svc, ins_types=("ippan", "kensetsu_koyou"))
+    svc.toggle_item(renewal_id, "ippan")
+    updated = svc.toggle_item(renewal_id, "kensetsu_koyou")
+    assert updated.overall_status == "提出済"

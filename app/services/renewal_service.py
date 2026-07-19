@@ -145,3 +145,28 @@ class RenewalService:
                 _ = r.items
             session.expunge_all()
             return records
+
+    def toggle_item(self, renewal_id: int, branch_type: str) -> AnnualRenewal:
+        with get_session(self._engine) as session:
+            renewal = session.get(AnnualRenewal, renewal_id)
+            if not renewal:
+                raise ValueError(f"年度更新レコードID {renewal_id} が見つかりません。")
+            item = next((i for i in renewal.items if i.branch_type == branch_type), None)
+            if item is not None and item.submission_status in ("未提出", "提出済"):
+                if item.submission_status == "未提出":
+                    item.submission_status = "提出済"
+                    item.confirmed_at = date.today()
+                else:
+                    item.submission_status = "未提出"
+                    item.confirmed_at = None
+
+                if not renewal.overall_status_manual:
+                    renewal.overall_status = compute_overall_status(
+                        [i.submission_status for i in renewal.items])
+                renewal.updated_at = datetime.now()
+                session.flush()
+
+            _ = renewal.member
+            _ = renewal.items
+            session.expunge_all()
+            return renewal
