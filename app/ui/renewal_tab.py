@@ -33,6 +33,18 @@ BRANCH_COL_START = 19  # "枝番0" の列インデックス（先頭19列: 管�
 _TAIL_START = BRANCH_COL_START + len(INS_TYPES)  # = 24: "特別" の列インデックス
 
 
+def _aggregate_sort_key(r):
+    """事業所が保有する枝番の保険番号を優先順位付き複数キーとして返す（数値は数値として比較）"""
+    def _ins_key(ins_type):
+        entry = next((e for e in r.member.insurance_entries if e.ins_type == ins_type), None)
+        val = entry.ins_number if entry else ""
+        try:
+            return (0, int(val))
+        except (ValueError, TypeError):
+            return (1, val or "")
+    return tuple(_ins_key(t) for t in INS_TYPES)
+
+
 class RenewalTab(QWidget):
     def __init__(self, engine, config, config_path, parent=None):
         super().__init__(parent)
@@ -44,6 +56,7 @@ class RenewalTab(QWidget):
         self._last_activity_map: dict = {}
         self._last_change_map: dict = {}
         self._resizing_programmatically = False
+        self._records: list = []
         self._freeze_col: int = self._get_staff_setting("renewal_freeze_col", 0)
         self._build_ui()
         self._apply_column_visibility()
@@ -175,9 +188,15 @@ class RenewalTab(QWidget):
         if status_filter == "すべて":
             status_filter = None
         records = self._svc.search(fiscal_year, keyword=keyword, status_filter=status_filter)
+        if self._get_staff_setting("renewal_aggregate_sort_active", False):
+            records.sort(key=_aggregate_sort_key)
+        self._records = records
         member_ids = [r.member.id for r in records]
         self._last_activity_map = self._activity_svc.get_last_logged_at_map(member_ids)
         self._last_change_map = self._activity_svc.get_last_changed_at_map(member_ids)
+        self._fill_table(records)
+
+    def _fill_table(self, records):
         self._table.setSortingEnabled(False)
         self._table.setRowCount(len(records))
         for row, r in enumerate(records):
@@ -196,12 +215,17 @@ class RenewalTab(QWidget):
                 self._table.setColumnWidth(col, 110)
         self._resizing_programmatically = False
 
-        saved_col = self._get_staff_setting("renewal_sort_column", -1)
-        saved_ord = Qt.SortOrder(self._get_staff_setting(
-            "renewal_sort_order", Qt.SortOrder.AscendingOrder.value))
-        self._table.setSortingEnabled(True)
-        if saved_col >= 0:
-            self._table.horizontalHeader().setSortIndicator(saved_col, saved_ord)
+        if self._get_staff_setting("renewal_aggregate_sort_active", False):
+            self._table.setSortingEnabled(True)
+        else:
+            saved_col = self._get_staff_setting("renewal_sort_column", -1)
+            saved_ord = Qt.SortOrder(self._get_staff_setting(
+                "renewal_sort_order", Qt.SortOrder.AscendingOrder.value))
+            self._table.setSortingEnabled(True)
+            if saved_col >= 0:
+                self._resizing_programmatically = True
+                self._table.horizontalHeader().setSortIndicator(saved_col, saved_ord)
+                self._resizing_programmatically = False
         self._update_frozen_view_geometry()
 
     def _populate_row(self, row, r):
@@ -290,9 +314,10 @@ class RenewalTab(QWidget):
 
     def _on_sort_changed(self, logical_col: int, order):
         self._frozen_view.horizontalHeader().setSortIndicator(logical_col, order)
-        if logical_col >= 0:
+        if not self._resizing_programmatically and logical_col >= 0:
             self._set_staff_setting("renewal_sort_column", logical_col)
             self._set_staff_setting("renewal_sort_order", order.value)
+            self._set_staff_setting("renewal_aggregate_sort_active", False)
 
     def _on_cell_clicked(self, row, col):
         if col < BRANCH_COL_START or col >= BRANCH_COL_START + len(INS_TYPES):
