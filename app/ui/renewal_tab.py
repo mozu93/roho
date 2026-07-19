@@ -219,6 +219,9 @@ class RenewalTab(QWidget):
         self._resizing_programmatically = False
 
         if self._get_staff_setting("renewal_aggregate_sort_active", False):
+            self._resizing_programmatically = True
+            self._table.horizontalHeader().setSortIndicator(-1, Qt.SortOrder.AscendingOrder)
+            self._resizing_programmatically = False
             self._table.setSortingEnabled(True)
         else:
             saved_col = self._get_staff_setting("renewal_sort_column", -1)
@@ -342,6 +345,10 @@ class RenewalTab(QWidget):
             return
         renewal_id = id_item.data(Qt.ItemDataRole.UserRole)
         renewal = self._svc.toggle_item(renewal_id, branch_type)
+        for i, rec in enumerate(self._records):
+            if rec.id == renewal_id:
+                self._records[i] = renewal
+                break
         self._table.setSortingEnabled(False)
         self._populate_row(row, renewal)
         self._table.setSortingEnabled(True)
