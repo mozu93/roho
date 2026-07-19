@@ -69,7 +69,7 @@ class RenewalTab(QWidget):
         self._table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
         for i, ins_type in enumerate(INS_TYPES):
             col = BRANCH_COL_START + i
-            self._table.setColumnWidth(col, 70)
+            self._table.setColumnWidth(col, 110)
             self._table.horizontalHeaderItem(col).setToolTip(BRANCH_LABEL[ins_type])
         self._table.doubleClicked.connect(self._on_row_double_clicked)
         self._table.cellClicked.connect(self._on_cell_clicked)
@@ -112,6 +112,7 @@ class RenewalTab(QWidget):
             self._table.setItem(row, col, item)
 
         items_by_type = {i.branch_type: i for i in r.items}
+        ins_number_by_type = {e.ins_type: e.ins_number for e in m.insurance_entries}
         for i, branch_type in enumerate(INS_TYPES):
             col = BRANCH_COL_START + i
             renewal_item = items_by_type.get(branch_type)
@@ -119,9 +120,11 @@ class RenewalTab(QWidget):
                 cell = QTableWidgetItem("－")
                 cell.setData(Qt.ItemDataRole.UserRole, None)
             else:
-                text = renewal_item.submission_status
+                status_text = renewal_item.submission_status
                 if renewal_item.submission_status == "提出済" and renewal_item.confirmed_at:
-                    text = f"提出済 {renewal_item.confirmed_at.strftime('%m-%d')}"
+                    status_text = f"提出済 {renewal_item.confirmed_at.strftime('%m-%d')}"
+                ins_number = ins_number_by_type.get(branch_type)
+                text = f"{ins_number} {status_text}" if ins_number else status_text
                 cell = QTableWidgetItem(text)
                 cell.setData(Qt.ItemDataRole.UserRole, (branch_type, renewal_item.submission_status))
             self._table.setItem(row, col, cell)

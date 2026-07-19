@@ -243,6 +243,20 @@ def test_search_results_have_items_loaded(svc):
     assert results[0].items[0].branch_type == "ippan"
 
 
+def test_search_results_have_member_insurance_entries_loaded(svc):
+    with get_session(svc._engine) as session:
+        m = Member(member_number="9001", org_name="A社", is_active=True, is_member=True)
+        session.add(m)
+        session.flush()
+        session.add(InsuranceEntry(
+            member_id=m.id, ins_type="ippan", branch_number="0", ins_number="123"))
+    svc.generate_records(2026)
+    results = svc.search(2026)
+    assert len(results) == 1
+    assert len(results[0].member.insurance_entries) == 1
+    assert results[0].member.insurance_entries[0].ins_number == "123"
+
+
 def test_toggle_item_marks_submitted_with_today(svc):
     renewal_id = _setup_renewal(svc, ins_types=("ippan",))
     updated = svc.toggle_item(renewal_id, "ippan")
