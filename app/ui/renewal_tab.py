@@ -106,8 +106,10 @@ class RenewalTab(QWidget):
         self._table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self._table.setSortingEnabled(True)
         self._table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
+        self._table.horizontalHeader().setSectionsMovable(True)
         self._table.horizontalHeader().sortIndicatorChanged.connect(self._on_sort_changed)
         self._table.horizontalHeader().sectionResized.connect(self._on_column_resized)
+        self._table.horizontalHeader().sectionMoved.connect(self._on_section_moved)
         self._resizing_programmatically = True
         for i, ins_type in enumerate(INS_TYPES):
             col = BRANCH_COL_START + i
@@ -306,6 +308,15 @@ class RenewalTab(QWidget):
                 self._table.hideColumn(i)
             else:
                 self._table.showColumn(i)
+        order = self._get_staff_setting("renewal_column_order")
+        if order and len(order) == len(COLS):
+            header = self._table.horizontalHeader()
+            self._resizing_programmatically = True
+            for visual, logical in enumerate(order):
+                current = header.visualIndex(logical)
+                if current != visual:
+                    header.moveSection(current, visual)
+            self._resizing_programmatically = False
 
     def _exec_column_menu(self, *_):
         dlg = QDialog(self)
@@ -372,3 +383,10 @@ class RenewalTab(QWidget):
         else:
             widths[str(logical_index)] = new_size
         self._set_staff_setting("renewal_column_widths", widths)
+
+    def _on_section_moved(self, logical: int, old_visual: int, new_visual: int):
+        if self._resizing_programmatically:
+            return
+        header = self._table.horizontalHeader()
+        order = [header.logicalIndex(v) for v in range(self._table.columnCount())]
+        self._set_staff_setting("renewal_column_order", order)
