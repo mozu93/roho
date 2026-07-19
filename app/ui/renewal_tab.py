@@ -383,6 +383,7 @@ class RenewalTab(QWidget):
         self._table.setSortingEnabled(False)
         self._populate_row(row, renewal)
         self._table.setSortingEnabled(True)
+        self._rebuild_member_row_map()
 
     def _on_row_double_clicked(self, index):
         item = self._table.item(index.row(), 1)
