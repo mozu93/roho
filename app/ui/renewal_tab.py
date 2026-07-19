@@ -182,6 +182,16 @@ class RenewalTab(QWidget):
 
         self._table.installEventFilter(self)
 
+        btn_row = QHBoxLayout()
+        btn_row.addStretch()
+        label_btn = QPushButton("ラベル出力")
+        label_btn.clicked.connect(self._on_label)
+        btn_row.addWidget(label_btn)
+        email_btn = QPushButton("メール送信")
+        email_btn.clicked.connect(self._on_compose_email)
+        btn_row.addWidget(email_btn)
+        layout.addLayout(btn_row)
+
     def _current_fiscal_year(self):
         data = self._year_combo.currentData()
         return int(data) if data is not None else None
@@ -661,3 +671,22 @@ class RenewalTab(QWidget):
                 )
         else:
             self._table.selectRow(row)
+
+    # ── ラベル出力・メール送信 ──
+
+    def _on_label(self):
+        from app.ui.dialogs.label_dialog import LabelDialog
+        members = [r.member for r in self._records if r.member.id in self._checked_ids]
+        if not members:
+            QMessageBox.warning(
+                self, "ラベル出力", "出力する事業所を選択してください（左端のチェックボックスで選択）。")
+            return
+        LabelDialog(self._engine, members, parent=self).exec()
+
+    def _on_compose_email(self):
+        from app.ui.dialogs.compose_email_dialog import ComposeEmailDialog
+        members = [r.member for r in self._records if r.member.id in self._checked_ids]
+        if not members:
+            QMessageBox.warning(self, "メール送信", "送信先を選択してください（左端のチェックボックスで選択）。")
+            return
+        ComposeEmailDialog(self._engine, self._config, members, parent=self).exec()
