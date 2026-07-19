@@ -94,6 +94,9 @@ class RenewalTab(QWidget):
         col_setting_btn = QPushButton("表示列選択")
         col_setting_btn.clicked.connect(self._exec_column_menu)
         top_row.addWidget(col_setting_btn)
+        agg_btn = QPushButton("集約並び替え")
+        agg_btn.clicked.connect(self._on_aggregate_sort)
+        top_row.addWidget(agg_btn)
         layout.addLayout(top_row)
 
         search_row = QHBoxLayout()
@@ -227,6 +230,11 @@ class RenewalTab(QWidget):
                 self._table.horizontalHeader().setSortIndicator(saved_col, saved_ord)
                 self._resizing_programmatically = False
         self._update_frozen_view_geometry()
+
+    def _on_aggregate_sort(self):
+        self._records.sort(key=_aggregate_sort_key)
+        self._set_staff_setting("renewal_aggregate_sort_active", True)
+        self._fill_table(self._records)
 
     def _populate_row(self, row, r):
         m = r.member
