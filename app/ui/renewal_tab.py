@@ -337,11 +337,13 @@ class RenewalTab(QWidget):
 
     def _apply_column_visibility(self):
         hidden_cols = self._get_staff_setting("renewal_hidden_columns", [])
+        self._resizing_programmatically = True
         for i, col in enumerate(COLS):
             if col in hidden_cols:
                 self._table.hideColumn(i)
             else:
                 self._table.showColumn(i)
+        self._resizing_programmatically = False
         order = self._get_staff_setting("renewal_column_order")
         if order and len(order) == len(COLS):
             header = self._table.horizontalHeader()
@@ -394,8 +396,8 @@ class RenewalTab(QWidget):
     def _toggle_column_visibility(self, idx, visible):
         hidden = list(self._get_staff_setting("renewal_hidden_columns", []))
         if visible:
-            self._table.showColumn(idx)
             self._resizing_programmatically = True
+            self._table.showColumn(idx)
             self._table.resizeColumnToContents(idx)
             self._resizing_programmatically = False
             if COLS[idx] in hidden:
