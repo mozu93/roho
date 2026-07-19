@@ -142,5 +142,6 @@ class RenewalService:
             records = q.order_by(Member.member_number).all()
             for r in records:
                 _ = r.member
+                _ = r.items
             session.expunge_all()
             return records

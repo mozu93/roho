@@ -228,3 +228,16 @@ def test_search_filter_by_overall_status(svc):
     results = svc.search(2026, status_filter="提出済")
     assert len(results) == 1
     assert results[0].member.org_name == "A社"
+
+
+def test_search_results_have_items_loaded(svc):
+    with get_session(svc._engine) as session:
+        m = Member(member_number="9001", org_name="A社", is_active=True, is_member=True)
+        session.add(m)
+        session.flush()
+        session.add(InsuranceEntry(member_id=m.id, ins_type="ippan", branch_number="0"))
+    svc.generate_records(2026)
+    results = svc.search(2026)
+    assert len(results) == 1
+    assert len(results[0].items) == 1
+    assert results[0].items[0].branch_type == "ippan"
