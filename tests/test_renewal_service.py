@@ -257,6 +257,22 @@ def test_search_results_have_member_insurance_entries_loaded(svc):
     assert results[0].member.insurance_entries[0].ins_number == "123"
 
 
+def test_toggle_item_result_has_member_insurance_entries_loaded(svc):
+    with get_session(svc._engine) as session:
+        m = Member(member_number="9001", org_name="A社", is_active=True, is_member=True)
+        session.add(m)
+        session.flush()
+        session.add(InsuranceEntry(
+            member_id=m.id, ins_type="ippan", branch_number="0", ins_number="123"))
+    svc.generate_records(2026)
+    with get_session(svc._engine) as session:
+        renewal_id = session.query(AnnualRenewal).filter_by(fiscal_year=2026).first().id
+
+    updated = svc.toggle_item(renewal_id, "ippan")
+    assert len(updated.member.insurance_entries) == 1
+    assert updated.member.insurance_entries[0].ins_number == "123"
+
+
 def test_toggle_item_marks_submitted_with_today(svc):
     renewal_id = _setup_renewal(svc, ins_types=("ippan",))
     updated = svc.toggle_item(renewal_id, "ippan")

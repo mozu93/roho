@@ -62,6 +62,10 @@ class RenewalTab(QWidget):
         layout.addLayout(search_row)
 
         self._table = QTableWidget()
+        self._table.setObjectName("renewalTable")
+        self._table.setStyleSheet(
+            "QTableWidget#renewalTable::item:hover { background: #ffe4ec; color: #1a1a1a; }"
+        )
         self._table.setColumnCount(len(COLS))
         self._table.setHorizontalHeaderLabels(COLS)
         self._table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)

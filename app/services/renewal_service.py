@@ -168,6 +168,7 @@ class RenewalService:
                 session.flush()
 
             _ = renewal.member
+            _ = renewal.member.insurance_entries
             _ = renewal.items
             session.expunge_all()
             return renewal
