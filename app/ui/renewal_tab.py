@@ -7,10 +7,20 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import Qt
 from app.services.renewal_service import RenewalService, OVERALL_STATUSES
-from app.ui.dialogs.renewal_edit_dialog import RenewalEditDialog
+from app.services.member_service import INS_TYPES
+from app.ui.dialogs.renewal_edit_dialog import RenewalEditDialog, BRANCH_LABEL
 
 FILTERS = ["すべて"] + OVERALL_STATUSES
-COLS = ["管理No.", "会員No.", "事業所名", "全体状況", "最終対応日", "備考"]
+BRANCH_SHORT_LABEL = {
+    "ippan": "枝番0", "kensetsu_koyou": "枝番2", "ringyo": "枝番4",
+    "kensetsu_genba": "枝番5", "kensetsu_jimusho": "枝番6",
+}
+BRANCH_COL_START = 3
+COLS = (
+    ["管理No.", "会員No.", "事業所名"]
+    + [BRANCH_SHORT_LABEL[t] for t in INS_TYPES]
+    + ["全体状況", "最終対応日", "備考"]
+)
 
 
 class RenewalTab(QWidget):
@@ -57,6 +67,10 @@ class RenewalTab(QWidget):
         self._table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self._table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self._table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
+        for i, ins_type in enumerate(INS_TYPES):
+            col = BRANCH_COL_START + i
+            self._table.setColumnWidth(col, 70)
+            self._table.horizontalHeaderItem(col).setToolTip(BRANCH_LABEL[ins_type])
         self._table.doubleClicked.connect(self._on_row_double_clicked)
         layout.addWidget(self._table)
 
@@ -85,20 +99,40 @@ class RenewalTab(QWidget):
         records = self._svc.search(fiscal_year, keyword=keyword, status_filter=status_filter)
         self._table.setRowCount(len(records))
         for row, r in enumerate(records):
-            m = r.member
-            values = [
-                str(m.company_code or ""),
-                m.member_number or "",
-                m.org_name,
-                r.overall_status or "",
-                r.last_contacted_at.strftime("%Y-%m-%d") if r.last_contacted_at else "",
-                (r.note or "")[:30],
-            ]
-            for col, value in enumerate(values):
-                item = QTableWidgetItem(value)
-                if col == 0:
-                    item.setData(Qt.ItemDataRole.UserRole, r.id)
-                self._table.setItem(row, col, item)
+            self._populate_row(row, r)
+
+    def _populate_row(self, row, r):
+        m = r.member
+        head_values = [str(m.company_code or ""), m.member_number or "", m.org_name]
+        for col, value in enumerate(head_values):
+            item = QTableWidgetItem(value)
+            if col == 0:
+                item.setData(Qt.ItemDataRole.UserRole, r.id)
+            self._table.setItem(row, col, item)
+
+        items_by_type = {i.branch_type: i for i in r.items}
+        for i, branch_type in enumerate(INS_TYPES):
+            col = BRANCH_COL_START + i
+            renewal_item = items_by_type.get(branch_type)
+            if renewal_item is None:
+                cell = QTableWidgetItem("－")
+                cell.setData(Qt.ItemDataRole.UserRole, None)
+            else:
+                text = renewal_item.submission_status
+                if renewal_item.submission_status == "提出済" and renewal_item.confirmed_at:
+                    text = f"提出済 {renewal_item.confirmed_at.strftime('%m-%d')}"
+                cell = QTableWidgetItem(text)
+                cell.setData(Qt.ItemDataRole.UserRole, (branch_type, renewal_item.submission_status))
+            self._table.setItem(row, col, cell)
+
+        tail_start = BRANCH_COL_START + len(INS_TYPES)
+        tail_values = [
+            r.overall_status or "",
+            r.last_contacted_at.strftime("%Y-%m-%d") if r.last_contacted_at else "",
+            (r.note or "")[:30],
+        ]
+        for offset, value in enumerate(tail_values):
+            self._table.setItem(row, tail_start + offset, QTableWidgetItem(value))
 
     def _on_row_double_clicked(self, index):
         item = self._table.item(index.row(), 0)
