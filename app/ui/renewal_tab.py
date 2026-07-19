@@ -309,7 +309,9 @@ class RenewalTab(QWidget):
             return
         renewal_id = id_item.data(Qt.ItemDataRole.UserRole)
         renewal = self._svc.toggle_item(renewal_id, branch_type)
+        self._table.setSortingEnabled(False)
         self._populate_row(row, renewal)
+        self._table.setSortingEnabled(True)
 
     def _on_row_double_clicked(self, index):
         item = self._table.item(index.row(), 0)
@@ -499,7 +501,7 @@ class RenewalTab(QWidget):
         header = self._table.horizontalHeader()
         logical = header.logicalIndexAt(pos)
         menu = QMenu(self)
-        if 0 <= logical < len(COLS):
+        if 0 < logical < len(COLS):
             col_name = COLS[logical]
             menu.addAction(
                 f"「{col_name}」列まで固定",
