@@ -4,13 +4,14 @@ from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QComboBox, QLineEdit, QPushButton,
     QTableWidget, QTableWidgetItem, QAbstractItemView, QHeaderView,
     QLabel, QMessageBox, QInputDialog, QMenu, QDialog, QGridLayout, QCheckBox,
+    QTableView, QFrame,
 )
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, QEvent
 from app.services.renewal_service import RenewalService, OVERALL_STATUSES
 from app.services.member_service import INS_TYPES
 from app.services.activity_service import ActivityService
 from app.ui.dialogs.renewal_edit_dialog import RenewalEditDialog, BRANCH_LABEL
-from app.ui.member_tab import SortableTableWidgetItem
+from app.ui.member_tab import SortableTableWidgetItem, _SelectionDelegate
 
 FILTERS = ["すべて"] + OVERALL_STATUSES
 BRANCH_SHORT_LABEL = {
@@ -43,6 +44,7 @@ class RenewalTab(QWidget):
         self._last_activity_map: dict = {}
         self._last_change_map: dict = {}
         self._resizing_programmatically = False
+        self._freeze_col: int = self._get_staff_setting("renewal_freeze_col", 0)
         self._build_ui()
         self._apply_column_visibility()
         self._refresh_years()
@@ -110,6 +112,9 @@ class RenewalTab(QWidget):
         self._table.horizontalHeader().sortIndicatorChanged.connect(self._on_sort_changed)
         self._table.horizontalHeader().sectionResized.connect(self._on_column_resized)
         self._table.horizontalHeader().sectionMoved.connect(self._on_section_moved)
+        self._table.horizontalHeader().setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self._table.horizontalHeader().customContextMenuRequested.connect(self._show_column_menu)
+        self._table.setItemDelegate(_SelectionDelegate(self._table))
         self._resizing_programmatically = True
         for i, ins_type in enumerate(INS_TYPES):
             col = BRANCH_COL_START + i
@@ -119,6 +124,33 @@ class RenewalTab(QWidget):
         self._table.doubleClicked.connect(self._on_row_double_clicked)
         self._table.cellClicked.connect(self._on_cell_clicked)
         layout.addWidget(self._table)
+
+        # 列固定オーバーレイ
+        self._frozen_view = QTableView(self._table)
+        self._frozen_view.setModel(self._table.model())
+        self._frozen_view.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self._frozen_view.verticalHeader().hide()
+        self._frozen_view.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
+        self._frozen_view.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self._frozen_view.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self._frozen_view.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
+        self._frozen_view.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        self._frozen_view.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        self._frozen_view.setAlternatingRowColors(True)
+        self._frozen_view.setFrameShape(QFrame.Shape.NoFrame)
+        self._frozen_view.verticalHeader().setDefaultSectionSize(30)
+        self._frozen_view.horizontalHeader().setSortIndicatorShown(True)
+        self._frozen_view.horizontalHeader().sectionClicked.connect(self._on_frozen_header_clicked)
+        self._frozen_view.doubleClicked.connect(self._on_frozen_double_clicked)
+        self._frozen_view.setSelectionModel(self._table.selectionModel())
+        self._frozen_view.setVisible(False)
+
+        self._table.verticalScrollBar().valueChanged.connect(
+            self._frozen_view.verticalScrollBar().setValue)
+        self._frozen_view.verticalScrollBar().valueChanged.connect(
+            self._table.verticalScrollBar().setValue)
+
+        self._table.installEventFilter(self)
 
     def _current_fiscal_year(self):
         data = self._year_combo.currentData()
@@ -170,6 +202,7 @@ class RenewalTab(QWidget):
         self._table.setSortingEnabled(True)
         if saved_col >= 0:
             self._table.horizontalHeader().setSortIndicator(saved_col, saved_ord)
+        self._update_frozen_view_geometry()
 
     def _populate_row(self, row, r):
         m = r.member
@@ -256,6 +289,7 @@ class RenewalTab(QWidget):
         self._table.setItem(row, _TAIL_START + 8, SortableTableWidgetItem((r.note or "")[:30]))
 
     def _on_sort_changed(self, logical_col: int, order):
+        self._frozen_view.horizontalHeader().setSortIndicator(logical_col, order)
         if logical_col >= 0:
             self._set_staff_setting("renewal_sort_column", logical_col)
             self._set_staff_setting("renewal_sort_order", order.value)
@@ -373,6 +407,8 @@ class RenewalTab(QWidget):
             if COLS[idx] not in hidden:
                 hidden.append(COLS[idx])
         self._set_staff_setting("renewal_hidden_columns", hidden)
+        if self._freeze_col > 0:
+            self._update_frozen_view_geometry()
 
     def _on_column_resized(self, logical_index: int, old_size: int, new_size: int):
         if self._resizing_programmatically:
@@ -383,6 +419,8 @@ class RenewalTab(QWidget):
         else:
             widths[str(logical_index)] = new_size
         self._set_staff_setting("renewal_column_widths", widths)
+        if self._freeze_col > 0 and logical_index <= self._freeze_col:
+            self._update_frozen_view_geometry()
 
     def _on_section_moved(self, logical: int, old_visual: int, new_visual: int):
         if self._resizing_programmatically:
@@ -390,3 +428,84 @@ class RenewalTab(QWidget):
         header = self._table.horizontalHeader()
         order = [header.logicalIndex(v) for v in range(self._table.columnCount())]
         self._set_staff_setting("renewal_column_order", order)
+
+    # ── 列固定 ──
+
+    def _set_freeze_col(self, col: int):
+        self._freeze_col = col
+        self._set_staff_setting("renewal_freeze_col", col)
+        self._update_frozen_view_geometry()
+
+    def _update_frozen_view_geometry(self):
+        n = self._freeze_col
+        table = self._table
+
+        if n <= 0:
+            self._frozen_view.setVisible(False)
+            return
+
+        frozen_width = 0
+        for c in range(table.columnCount()):
+            user_hidden = table.isColumnHidden(c)
+            beyond_freeze = (c > n)
+            self._frozen_view.setColumnHidden(c, beyond_freeze or user_hidden)
+            if not beyond_freeze and not user_hidden:
+                w = table.columnWidth(c)
+                self._frozen_view.setColumnWidth(c, w)
+                frozen_width += w
+
+        hh_h = table.horizontalHeader().height()
+        self._frozen_view.horizontalHeader().setFixedHeight(hh_h)
+
+        for r in range(table.rowCount()):
+            self._frozen_view.setRowHeight(r, table.rowHeight(r))
+
+        vh_w = table.verticalHeader().width() if not table.verticalHeader().isHidden() else 0
+        fw = table.frameWidth()
+        self._frozen_view.setGeometry(
+            fw + vh_w, fw,
+            frozen_width,
+            table.height() - fw * 2,
+        )
+        self._frozen_view.setVisible(True)
+        self._frozen_view.raise_()
+
+    def eventFilter(self, obj, event):
+        if obj is self._table and event.type() == QEvent.Type.Resize:
+            self._update_frozen_view_geometry()
+        return super().eventFilter(obj, event)
+
+    def _on_frozen_header_clicked(self, logical_col: int):
+        header = self._table.horizontalHeader()
+        current_col = header.sortIndicatorSection()
+        current_order = header.sortIndicatorOrder()
+        if current_col == logical_col:
+            new_order = (Qt.SortOrder.DescendingOrder
+                         if current_order == Qt.SortOrder.AscendingOrder
+                         else Qt.SortOrder.AscendingOrder)
+        else:
+            new_order = Qt.SortOrder.AscendingOrder
+        self._table.sortItems(logical_col, new_order)
+        header.setSortIndicator(logical_col, new_order)
+        self._frozen_view.horizontalHeader().setSortIndicator(logical_col, new_order)
+
+    def _on_frozen_double_clicked(self, index):
+        self._table.selectRow(index.row())
+        self._on_row_double_clicked(self._table.model().index(index.row(), 0))
+
+    def _show_column_menu(self, pos):
+        header = self._table.horizontalHeader()
+        logical = header.logicalIndexAt(pos)
+        menu = QMenu(self)
+        if 0 <= logical < len(COLS):
+            col_name = COLS[logical]
+            menu.addAction(
+                f"「{col_name}」列まで固定",
+                lambda: self._set_freeze_col(logical),
+            )
+        if self._freeze_col > 0:
+            menu.addAction("列固定を解除", lambda: self._set_freeze_col(0))
+        if not menu.isEmpty():
+            menu.addSeparator()
+        menu.addAction("表示列選択", self._exec_column_menu)
+        menu.exec(header.mapToGlobal(pos))
