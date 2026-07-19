@@ -4,14 +4,16 @@ from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QComboBox, QLineEdit, QPushButton,
     QTableWidget, QTableWidgetItem, QAbstractItemView, QHeaderView,
     QLabel, QMessageBox, QInputDialog, QMenu, QDialog, QGridLayout, QCheckBox,
-    QTableView, QFrame,
+    QTableView, QFrame, QApplication,
 )
 from PyQt6.QtCore import Qt, QEvent
 from app.services.renewal_service import RenewalService, OVERALL_STATUSES
 from app.services.member_service import INS_TYPES
 from app.services.activity_service import ActivityService
 from app.ui.dialogs.renewal_edit_dialog import RenewalEditDialog, BRANCH_LABEL
-from app.ui.member_tab import SortableTableWidgetItem, _SelectionDelegate
+from app.ui.member_tab import (
+    SortableTableWidgetItem, _SelectionDelegate, _CheckHeader, _FrozenCheckDelegate,
+)
 
 FILTERS = ["すべて"] + OVERALL_STATUSES
 BRANCH_SHORT_LABEL = {
@@ -21,6 +23,7 @@ BRANCH_SHORT_LABEL = {
 _AC = Qt.AlignmentFlag.AlignCenter
 
 COLS = [
+    "",
     "管理No.", "会", "会員No.", "事業所名", "フリガナ", "所属・役職",
     "代表者名", "代表者フリガナ", "メール", "市外局番", "電話番号", "FAX市外局番", "FAX",
     "郵便番号", "住所", "郵送先郵便番号", "郵送先住所", "郵送先宛名", "雇用保険事業所番号",
@@ -29,8 +32,9 @@ COLS = [
     "最終対応日（全体）", "メモ（全体）",
     "全体状況", "最終対応日（年度更新）", "備考（年度更新）",
 ]
-BRANCH_COL_START = 19  # "枝番0" の列インデックス（先頭19列: 管理No.〜雇用保険事業所番号）
-_TAIL_START = BRANCH_COL_START + len(INS_TYPES)  # = 24: "特別" の列インデックス
+_COL_SELECT = 0
+BRANCH_COL_START = 20  # "枝番0" の列インデックス（チェックボックス+先頭19列: 管理No.〜雇用保険事業所番号）
+_TAIL_START = BRANCH_COL_START + len(INS_TYPES)  # = 25: "特別" の列インデックス
 
 
 def _aggregate_sort_key(r):
@@ -57,6 +61,9 @@ class RenewalTab(QWidget):
         self._last_change_map: dict = {}
         self._resizing_programmatically = False
         self._records: list = []
+        self._checked_ids: set[int] = set()
+        self._last_checked_member_id: int = -1
+        self._member_row_map: dict[int, int] = {}
         self._freeze_col: int = self._get_staff_setting("renewal_freeze_col", 0)
         self._build_ui()
         self._apply_column_visibility()
@@ -119,17 +126,21 @@ class RenewalTab(QWidget):
             "QTableWidget#renewalTable::item:hover { background: #ffe4ec; color: #1a1a1a; }"
         )
         self._table.setColumnCount(len(COLS))
+        self._check_header = _CheckHeader(self._table)
+        self._check_header.toggled.connect(self._on_select_all)
+        self._table.setHorizontalHeader(self._check_header)
         self._table.setHorizontalHeaderLabels(COLS)
         self._table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self._table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self._table.setSortingEnabled(True)
-        self._table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
-        self._table.horizontalHeader().setSectionsMovable(True)
-        self._table.horizontalHeader().sortIndicatorChanged.connect(self._on_sort_changed)
-        self._table.horizontalHeader().sectionResized.connect(self._on_column_resized)
-        self._table.horizontalHeader().sectionMoved.connect(self._on_section_moved)
-        self._table.horizontalHeader().setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
-        self._table.horizontalHeader().customContextMenuRequested.connect(self._show_column_menu)
+        self._check_header.setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
+        self._check_header.setSectionsMovable(True)
+        self._check_header.sortIndicatorChanged.connect(self._on_sort_changed)
+        self._check_header.sectionResized.connect(self._on_column_resized)
+        self._check_header.sectionMoved.connect(self._on_section_moved)
+        self._check_header.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self._check_header.customContextMenuRequested.connect(self._show_column_menu)
+        self._check_header.setMinimumSectionSize(30)
         self._table.setItemDelegate(_SelectionDelegate(self._table))
         self._resizing_programmatically = True
         for i, ins_type in enumerate(INS_TYPES):
@@ -155,8 +166,11 @@ class RenewalTab(QWidget):
         self._frozen_view.setAlternatingRowColors(True)
         self._frozen_view.setFrameShape(QFrame.Shape.NoFrame)
         self._frozen_view.verticalHeader().setDefaultSectionSize(30)
+        self._frozen_view.setItemDelegateForColumn(
+            _COL_SELECT, _FrozenCheckDelegate(self._checked_ids, self._frozen_view))
         self._frozen_view.horizontalHeader().setSortIndicatorShown(True)
         self._frozen_view.horizontalHeader().sectionClicked.connect(self._on_frozen_header_clicked)
+        self._frozen_view.clicked.connect(self._on_frozen_clicked)
         self._frozen_view.doubleClicked.connect(self._on_frozen_double_clicked)
         self._frozen_view.setSelectionModel(self._table.selectionModel())
         self._frozen_view.setVisible(False)
@@ -208,7 +222,9 @@ class RenewalTab(QWidget):
         self._resizing_programmatically = True
         saved_widths = self._get_staff_setting("renewal_column_widths", {})
         for i in range(self._table.columnCount()):
-            if str(i) in saved_widths:
+            if i == _COL_SELECT:
+                self._table.setColumnWidth(i, 44)
+            elif str(i) in saved_widths:
                 self._table.setColumnWidth(i, int(saved_widths[str(i)]))
             else:
                 self._table.resizeColumnToContents(i)
@@ -233,6 +249,7 @@ class RenewalTab(QWidget):
                 self._table.horizontalHeader().setSortIndicator(saved_col, saved_ord)
                 self._resizing_programmatically = False
         self._update_frozen_view_geometry()
+        self._rebuild_member_row_map()
 
     def _on_aggregate_sort(self):
         self._records.sort(key=_aggregate_sort_key)
@@ -244,25 +261,38 @@ class RenewalTab(QWidget):
         has_tokubetsu = any(e.is_tokubetsu for e in m.insurance_entries)
         has_ikkatsu = any(e.is_ikkatsu for e in m.insurance_entries)
 
+        chk_container = QWidget()
+        chk_hbox = QHBoxLayout(chk_container)
+        chk_hbox.setContentsMargins(0, 0, 0, 0)
+        chk_hbox.setAlignment(_AC)
+        chk = QCheckBox()
+        chk.setChecked(m.id in self._checked_ids)
+        chk.stateChanged.connect(lambda state, mid=m.id: self._on_check_changed(mid, state))
+        chk_hbox.addWidget(chk)
+        self._table.setCellWidget(row, _COL_SELECT, chk_container)
+        sel_item = QTableWidgetItem()
+        sel_item.setData(Qt.ItemDataRole.UserRole, m.id)
+        self._table.setItem(row, _COL_SELECT, sel_item)
+
         code_item = SortableTableWidgetItem(str(m.company_code) if m.company_code else "")
         code_item.setData(Qt.ItemDataRole.UserRole, r.id)
         code_item.setTextAlignment(_AC)
-        self._table.setItem(row, 0, code_item)
+        self._table.setItem(row, 1, code_item)
 
         mem_item = SortableTableWidgetItem("○" if getattr(m, "is_member", True) else "")
         mem_item.setTextAlignment(_AC)
-        self._table.setItem(row, 1, mem_item)
+        self._table.setItem(row, 2, mem_item)
 
         mno_item = SortableTableWidgetItem(m.member_number or "")
         mno_item.setTextAlignment(_AC)
-        self._table.setItem(row, 2, mno_item)
+        self._table.setItem(row, 3, mno_item)
 
-        self._table.setItem(row, 3, SortableTableWidgetItem(m.org_name))
-        self._table.setItem(row, 4, SortableTableWidgetItem(m.org_kana or ""))
-        self._table.setItem(row, 5, SortableTableWidgetItem(m.dept_title or ""))
-        self._table.setItem(row, 6, SortableTableWidgetItem(m.rep_name or ""))
-        self._table.setItem(row, 7, SortableTableWidgetItem(m.rep_kana or ""))
-        self._table.setItem(row, 8, SortableTableWidgetItem(m.email or ""))
+        self._table.setItem(row, 4, SortableTableWidgetItem(m.org_name))
+        self._table.setItem(row, 5, SortableTableWidgetItem(m.org_kana or ""))
+        self._table.setItem(row, 6, SortableTableWidgetItem(m.dept_title or ""))
+        self._table.setItem(row, 7, SortableTableWidgetItem(m.rep_name or ""))
+        self._table.setItem(row, 8, SortableTableWidgetItem(m.rep_kana or ""))
+        self._table.setItem(row, 9, SortableTableWidgetItem(m.email or ""))
 
         for delta, text in enumerate([
             m.tel_area or "", m.tel or "", m.fax_area or "", m.fax or "",
@@ -272,7 +302,7 @@ class RenewalTab(QWidget):
         ]):
             item = SortableTableWidgetItem(text)
             item.setTextAlignment(_AC)
-            self._table.setItem(row, 9 + delta, item)
+            self._table.setItem(row, 10 + delta, item)
 
         items_by_type = {i.branch_type: i for i in r.items}
         ins_number_by_type = {e.ins_type: e.ins_number for e in m.insurance_entries}
@@ -325,6 +355,7 @@ class RenewalTab(QWidget):
 
     def _on_sort_changed(self, logical_col: int, order):
         self._frozen_view.horizontalHeader().setSortIndicator(logical_col, order)
+        self._rebuild_member_row_map()
         if not self._resizing_programmatically and logical_col >= 0:
             self._set_staff_setting("renewal_sort_column", logical_col)
             self._set_staff_setting("renewal_sort_order", order.value)
@@ -334,7 +365,7 @@ class RenewalTab(QWidget):
         if col < BRANCH_COL_START or col >= BRANCH_COL_START + len(INS_TYPES):
             return
         cell = self._table.item(row, col)
-        id_item = self._table.item(row, 0)
+        id_item = self._table.item(row, 1)
         if cell is None or id_item is None:
             return
         data = cell.data(Qt.ItemDataRole.UserRole)
@@ -354,7 +385,7 @@ class RenewalTab(QWidget):
         self._table.setSortingEnabled(True)
 
     def _on_row_double_clicked(self, index):
-        item = self._table.item(index.row(), 0)
+        item = self._table.item(index.row(), 1)
         if not item:
             return
         renewal_id = item.data(Qt.ItemDataRole.UserRole)
@@ -404,7 +435,7 @@ class RenewalTab(QWidget):
         hidden_cols = list(self._get_staff_setting("renewal_hidden_columns", []))
 
         outer = QVBoxLayout(dlg)
-        items = list(enumerate(COLS))
+        items = [(i, col) for i, col in enumerate(COLS) if i != _COL_SELECT]
         half = (len(items) + 1) // 2
 
         grid_widget = QWidget()
@@ -532,6 +563,7 @@ class RenewalTab(QWidget):
         self._table.sortItems(logical_col, new_order)
         header.setSortIndicator(logical_col, new_order)
         self._frozen_view.horizontalHeader().setSortIndicator(logical_col, new_order)
+        self._rebuild_member_row_map()
 
     def _on_frozen_double_clicked(self, index):
         self._table.selectRow(index.row())
@@ -553,3 +585,78 @@ class RenewalTab(QWidget):
             menu.addSeparator()
         menu.addAction("表示列選択", self._exec_column_menu)
         menu.exec(header.mapToGlobal(pos))
+
+    # ── 選択（チェックボックス） ──
+
+    def _on_select_all(self, checked: bool):
+        if checked:
+            for r in self._records:
+                self._checked_ids.add(r.member.id)
+        else:
+            self._checked_ids.clear()
+        for row in range(self._table.rowCount()):
+            container = self._table.cellWidget(row, _COL_SELECT)
+            if container:
+                chk = container.findChild(QCheckBox)
+                if chk:
+                    chk.blockSignals(True)
+                    chk.setChecked(checked)
+                    chk.blockSignals(False)
+        self._frozen_view.viewport().update()
+
+    def _on_check_changed(self, member_id: int, state: int):
+        new_checked = (state == Qt.CheckState.Checked.value)
+        mods = QApplication.keyboardModifiers()
+
+        if (mods & Qt.KeyboardModifier.ShiftModifier) and self._last_checked_member_id >= 0:
+            start_row = self._find_row_by_member_id(self._last_checked_member_id)
+            end_row = self._find_row_by_member_id(member_id)
+            if start_row >= 0 and end_row >= 0:
+                for r in range(min(start_row, end_row), max(start_row, end_row) + 1):
+                    container = self._table.cellWidget(r, _COL_SELECT)
+                    item = self._table.item(r, _COL_SELECT)
+                    mid = item.data(Qt.ItemDataRole.UserRole) if item else None
+                    if container and mid is not None:
+                        chk = container.findChild(QCheckBox)
+                        if chk:
+                            chk.blockSignals(True)
+                            chk.setChecked(new_checked)
+                            chk.blockSignals(False)
+                        if new_checked:
+                            self._checked_ids.add(mid)
+                        else:
+                            self._checked_ids.discard(mid)
+        else:
+            if new_checked:
+                self._checked_ids.add(member_id)
+            else:
+                self._checked_ids.discard(member_id)
+
+        self._last_checked_member_id = member_id
+        self._frozen_view.viewport().update()
+
+    def _find_row_by_member_id(self, member_id: int) -> int:
+        return self._member_row_map.get(member_id, -1)
+
+    def _rebuild_member_row_map(self):
+        self._member_row_map = {}
+        for r in range(self._table.rowCount()):
+            item = self._table.item(r, _COL_SELECT)
+            if item:
+                mid = item.data(Qt.ItemDataRole.UserRole)
+                if mid is not None:
+                    self._member_row_map[mid] = r
+
+    def _on_frozen_clicked(self, index):
+        row = index.row()
+        col = index.column()
+        if col == _COL_SELECT:
+            mid = index.data(Qt.ItemDataRole.UserRole)
+            if mid is not None:
+                new_checked = mid not in self._checked_ids
+                self._on_check_changed(
+                    mid,
+                    Qt.CheckState.Checked.value if new_checked else Qt.CheckState.Unchecked.value,
+                )
+        else:
+            self._table.selectRow(row)
