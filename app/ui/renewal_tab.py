@@ -13,6 +13,7 @@ from app.services.activity_service import ActivityService
 from app.ui.dialogs.renewal_edit_dialog import RenewalEditDialog, BRANCH_LABEL
 from app.ui.member_tab import (
     SortableTableWidgetItem, _SelectionDelegate, _CheckHeader, _FrozenCheckDelegate,
+    _FrozenItemDelegate,
 )
 
 FILTERS = ["すべて"] + OVERALL_STATUSES
@@ -166,6 +167,7 @@ class RenewalTab(QWidget):
         self._frozen_view.setAlternatingRowColors(True)
         self._frozen_view.setFrameShape(QFrame.Shape.NoFrame)
         self._frozen_view.verticalHeader().setDefaultSectionSize(30)
+        self._frozen_view.setItemDelegate(_FrozenItemDelegate(self._frozen_view))
         self._frozen_view.setItemDelegateForColumn(
             _COL_SELECT, _FrozenCheckDelegate(self._checked_ids, self._frozen_view))
         self._frozen_view.horizontalHeader().setSortIndicatorShown(True)
