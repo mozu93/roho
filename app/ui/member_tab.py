@@ -500,6 +500,7 @@ class MemberTab(QWidget):
         layout.addLayout(btn_row)
 
     def _refresh(self):
+        current_member_id = self._current_row_member_id()
         members = self._svc.search(
             keyword=self._keyword_edit.text(),
             active_only=True,
@@ -511,6 +512,24 @@ class MemberTab(QWidget):
         self._last_activity_map = self._activity_svc.get_last_logged_at_map(member_ids)
         self._last_change_map = self._activity_svc.get_last_changed_at_map(member_ids)
         self._fill_table(members)
+        self._restore_row_selection(current_member_id)
+
+    def _current_row_member_id(self):
+        row = self._table.currentRow()
+        if row < 0:
+            return None
+        item = self._table.item(row, _COL_COMPANY_CODE)
+        return item.data(Qt.ItemDataRole.UserRole) if item else None
+
+    def _restore_row_selection(self, member_id):
+        if member_id is not None:
+            for row in range(self._table.rowCount()):
+                item = self._table.item(row, _COL_COMPANY_CODE)
+                if item and item.data(Qt.ItemDataRole.UserRole) == member_id:
+                    self._table.selectRow(row)
+                    return
+        self._table.clearSelection()
+        self._table.setCurrentCell(-1, -1)
 
     def _fill_table(self, members):
         self._member_row_map = {}
@@ -996,16 +1015,7 @@ class MemberTab(QWidget):
         if reply != QMessageBox.StandardButton.Yes:
             return
         self._activity_svc.delete_log(log_id)
-        m = self._selected_member()
-        saved_id = m.id if m else None
-        self._refresh()  # 最終対応日更新のため
-        if saved_id is not None:
-            # refresh後も同じ行を選択し直す（ソート等で行位置が変わる場合に対応）
-            for row in range(self._table.rowCount()):
-                item = self._table.item(row, _COL_COMPANY_CODE)
-                if item and item.data(Qt.ItemDataRole.UserRole) == saved_id:
-                    self._table.selectRow(row)
-                    break
+        self._refresh()  # 最終対応日更新のため（選択行は_refresh内で復元される）
 
     def refresh_categories(self):
         current_id = self._cat_combo.currentData()
@@ -1033,14 +1043,7 @@ class MemberTab(QWidget):
             self._activity_svc.add_log(m.id, content, cat_ids, self._config.last_staff_name)
             self._content_edit.clear()
             self._cat_combo.setCurrentIndex(0)
-            saved_id = m.id
-            self._refresh()  # 最終対応日更新のため
-            # refresh後も同じ行を選択し直す（ソート等で行位置が変わる場合に対応）
-            for row in range(self._table.rowCount()):
-                item = self._table.item(row, _COL_COMPANY_CODE)
-                if item and item.data(Qt.ItemDataRole.UserRole) == saved_id:
-                    self._table.selectRow(row)
-                    break
+            self._refresh()  # 最終対応日更新のため（選択行は_refresh内で復元される）
         except Exception as e:
             QMessageBox.critical(self, "エラー", str(e))
 
