@@ -108,10 +108,12 @@ class RenewalTab(QWidget):
         self._table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
         self._table.horizontalHeader().sortIndicatorChanged.connect(self._on_sort_changed)
         self._table.horizontalHeader().sectionResized.connect(self._on_column_resized)
+        self._resizing_programmatically = True
         for i, ins_type in enumerate(INS_TYPES):
             col = BRANCH_COL_START + i
             self._table.setColumnWidth(col, 110)
             self._table.horizontalHeaderItem(col).setToolTip(BRANCH_LABEL[ins_type])
+        self._resizing_programmatically = False
         self._table.doubleClicked.connect(self._on_row_double_clicked)
         self._table.cellClicked.connect(self._on_cell_clicked)
         layout.addWidget(self._table)
@@ -354,7 +356,9 @@ class RenewalTab(QWidget):
             if COLS[idx] in hidden:
                 hidden.remove(COLS[idx])
         else:
+            self._resizing_programmatically = True
             self._table.hideColumn(idx)
+            self._resizing_programmatically = False
             if COLS[idx] not in hidden:
                 hidden.append(COLS[idx])
         self._set_staff_setting("renewal_hidden_columns", hidden)
