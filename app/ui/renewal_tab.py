@@ -3,7 +3,7 @@ from datetime import datetime
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QComboBox, QLineEdit, QPushButton,
     QTableWidget, QTableWidgetItem, QAbstractItemView, QHeaderView,
-    QLabel, QMessageBox, QInputDialog,
+    QLabel, QMessageBox, QInputDialog, QMenu, QDialog, QGridLayout, QCheckBox,
 )
 from PyQt6.QtCore import Qt
 from app.services.renewal_service import RenewalService, OVERALL_STATUSES
@@ -42,7 +42,9 @@ class RenewalTab(QWidget):
         self._activity_svc = ActivityService(engine)
         self._last_activity_map: dict = {}
         self._last_change_map: dict = {}
+        self._resizing_programmatically = False
         self._build_ui()
+        self._apply_column_visibility()
         self._refresh_years()
 
     # ── per-staff 設定ヘルパー ──
@@ -74,6 +76,9 @@ class RenewalTab(QWidget):
         gen_btn.clicked.connect(self._on_generate)
         top_row.addWidget(gen_btn)
         top_row.addStretch()
+        col_setting_btn = QPushButton("表示列選択")
+        col_setting_btn.clicked.connect(self._exec_column_menu)
+        top_row.addWidget(col_setting_btn)
         layout.addLayout(top_row)
 
         search_row = QHBoxLayout()
@@ -102,6 +107,7 @@ class RenewalTab(QWidget):
         self._table.setSortingEnabled(True)
         self._table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
         self._table.horizontalHeader().sortIndicatorChanged.connect(self._on_sort_changed)
+        self._table.horizontalHeader().sectionResized.connect(self._on_column_resized)
         for i, ins_type in enumerate(INS_TYPES):
             col = BRANCH_COL_START + i
             self._table.setColumnWidth(col, 110)
@@ -140,6 +146,20 @@ class RenewalTab(QWidget):
         self._table.setRowCount(len(records))
         for row, r in enumerate(records):
             self._populate_row(row, r)
+
+        self._resizing_programmatically = True
+        saved_widths = self._get_staff_setting("renewal_column_widths", {})
+        for i in range(self._table.columnCount()):
+            if str(i) in saved_widths:
+                self._table.setColumnWidth(i, int(saved_widths[str(i)]))
+            else:
+                self._table.resizeColumnToContents(i)
+        for i, ins_type in enumerate(INS_TYPES):
+            col = BRANCH_COL_START + i
+            if str(col) not in saved_widths:
+                self._table.setColumnWidth(col, 110)
+        self._resizing_programmatically = False
+
         saved_col = self._get_staff_setting("renewal_sort_column", -1)
         saved_ord = Qt.SortOrder(self._get_staff_setting(
             "renewal_sort_order", Qt.SortOrder.AscendingOrder.value))
@@ -274,3 +294,77 @@ class RenewalTab(QWidget):
         idx = self._year_combo.findData(year)
         if idx >= 0:
             self._year_combo.setCurrentIndex(idx)
+
+    # ── 列表示・幅 ──
+
+    def _apply_column_visibility(self):
+        hidden_cols = self._get_staff_setting("renewal_hidden_columns", [])
+        for i, col in enumerate(COLS):
+            if col in hidden_cols:
+                self._table.hideColumn(i)
+            else:
+                self._table.showColumn(i)
+
+    def _exec_column_menu(self, *_):
+        dlg = QDialog(self)
+        dlg.setWindowTitle("表示列選択")
+        dlg.setMinimumWidth(320)
+
+        hidden_cols = list(self._get_staff_setting("renewal_hidden_columns", []))
+
+        outer = QVBoxLayout(dlg)
+        items = list(enumerate(COLS))
+        half = (len(items) + 1) // 2
+
+        grid_widget = QWidget()
+        grid = QGridLayout(grid_widget)
+        grid.setHorizontalSpacing(16)
+        grid.setVerticalSpacing(4)
+
+        for r, (i, col) in enumerate(items[:half]):
+            chk = QCheckBox(col or f"列{i}")
+            chk.setChecked(COLS[i] not in hidden_cols)
+            chk.toggled.connect(lambda checked, idx=i: self._toggle_column_visibility(idx, checked))
+            grid.addWidget(chk, r, 0)
+
+        for r, (i, col) in enumerate(items[half:]):
+            chk = QCheckBox(col or f"列{i}")
+            chk.setChecked(COLS[i] not in hidden_cols)
+            chk.toggled.connect(lambda checked, idx=i: self._toggle_column_visibility(idx, checked))
+            grid.addWidget(chk, r, 1)
+
+        outer.addWidget(grid_widget)
+
+        btn_row = QHBoxLayout()
+        btn_row.addStretch()
+        close_btn = QPushButton("閉じる")
+        close_btn.clicked.connect(dlg.accept)
+        btn_row.addWidget(close_btn)
+        outer.addLayout(btn_row)
+
+        dlg.exec()
+
+    def _toggle_column_visibility(self, idx, visible):
+        hidden = list(self._get_staff_setting("renewal_hidden_columns", []))
+        if visible:
+            self._table.showColumn(idx)
+            self._resizing_programmatically = True
+            self._table.resizeColumnToContents(idx)
+            self._resizing_programmatically = False
+            if COLS[idx] in hidden:
+                hidden.remove(COLS[idx])
+        else:
+            self._table.hideColumn(idx)
+            if COLS[idx] not in hidden:
+                hidden.append(COLS[idx])
+        self._set_staff_setting("renewal_hidden_columns", hidden)
+
+    def _on_column_resized(self, logical_index: int, old_size: int, new_size: int):
+        if self._resizing_programmatically:
+            return
+        widths = dict(self._get_staff_setting("renewal_column_widths", {}))
+        if new_size == 0:
+            widths.pop(str(logical_index), None)
+        else:
+            widths[str(logical_index)] = new_size
+        self._set_staff_setting("renewal_column_widths", widths)
