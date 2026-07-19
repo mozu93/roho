@@ -72,6 +72,7 @@ class RenewalTab(QWidget):
             self._table.setColumnWidth(col, 70)
             self._table.horizontalHeaderItem(col).setToolTip(BRANCH_LABEL[ins_type])
         self._table.doubleClicked.connect(self._on_row_double_clicked)
+        self._table.cellClicked.connect(self._on_cell_clicked)
         layout.addWidget(self._table)
 
     def _current_fiscal_year(self):
@@ -133,6 +134,23 @@ class RenewalTab(QWidget):
         ]
         for offset, value in enumerate(tail_values):
             self._table.setItem(row, tail_start + offset, QTableWidgetItem(value))
+
+    def _on_cell_clicked(self, row, col):
+        if col < BRANCH_COL_START or col >= BRANCH_COL_START + len(INS_TYPES):
+            return
+        cell = self._table.item(row, col)
+        id_item = self._table.item(row, 0)
+        if cell is None or id_item is None:
+            return
+        data = cell.data(Qt.ItemDataRole.UserRole)
+        if data is None:
+            return
+        branch_type, status = data
+        if status not in ("未提出", "提出済"):
+            return
+        renewal_id = id_item.data(Qt.ItemDataRole.UserRole)
+        renewal = self._svc.toggle_item(renewal_id, branch_type)
+        self._populate_row(row, renewal)
 
     def _on_row_double_clicked(self, index):
         item = self._table.item(index.row(), 0)
