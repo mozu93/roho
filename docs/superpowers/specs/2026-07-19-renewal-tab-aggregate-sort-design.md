@@ -72,12 +72,12 @@ self._update_frozen_view_geometry()
 
 ### 4.4 `_on_sort_changed`の更新
 
+`self._frozen_view`側インジケータの同期は、プログラムによる復元時にも見た目の一貫性のため常に行う（早期returnで丸ごとスキップしない）。永続化処理のみをガードで囲む：
+
 ```python
 def _on_sort_changed(self, logical_col: int, order):
-    if self._resizing_programmatically:
-        return
     self._frozen_view.horizontalHeader().setSortIndicator(logical_col, order)
-    if logical_col >= 0:
+    if not self._resizing_programmatically and logical_col >= 0:
         self._set_staff_setting("renewal_sort_column", logical_col)
         self._set_staff_setting("renewal_sort_order", order.value)
         self._set_staff_setting("renewal_aggregate_sort_active", False)
