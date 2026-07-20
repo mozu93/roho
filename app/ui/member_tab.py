@@ -181,7 +181,7 @@ COLS = [
     "No.", "会", "会員No.", "事業所名", "フリガナ", "所属・役職",
     "代表者名", "代表者フリガナ", "メール", "市外局番", "電話番号", "FAX市外局番", "FAX",
     "郵便番号", "住所",
-    "郵送先郵便番号", "郵送先住所", "郵送先宛名", "雇用保険事業所番号",
+    "郵送先郵便番号", "郵送先住所", "郵送先事業所名", "郵送先所属・役職名", "郵送先氏名", "雇用保険事業所番号",
     "0", "2", "4", "5", "6", "特別", "継続一括", "登録日", "最終更新日", "最終対応日", "メモ"
 ]
 # 列インデックス定数
@@ -596,10 +596,12 @@ class MemberTab(QWidget):
             self._table.setItem(row, 15, SortableTableWidgetItem(m.address or ""))
             self._table.setItem(row, 16, SortableTableWidgetItem(m.postal_code_mail or ""))
             self._table.setItem(row, 17, SortableTableWidgetItem(m.address_mail or ""))
-            self._table.setItem(row, 18, SortableTableWidgetItem(m.addressee_mail or ""))
+            self._table.setItem(row, 18, SortableTableWidgetItem(m.mail_org_name or ""))
+            self._table.setItem(row, 19, SortableTableWidgetItem(m.mail_dept_title or ""))
+            self._table.setItem(row, 20, SortableTableWidgetItem(m.mail_person_name or ""))
             emp_item = SortableTableWidgetItem(m.employment_ins_no or "")
             emp_item.setTextAlignment(_ac)
-            self._table.setItem(row, 19, emp_item)
+            self._table.setItem(row, 21, emp_item)
             ins_map = {e.ins_type: e for e in m.insurance_entries}
             for col_idx, ins_type in enumerate(INS_TYPES):
                 entry = ins_map.get(ins_type)
@@ -613,31 +615,31 @@ class MemberTab(QWidget):
                         item.setBackground(QBrush(QColor(226, 240, 217)))
                     elif entry.is_ikkatsu:
                         item.setBackground(QBrush(QColor(255, 224, 178)))
-                self._table.setItem(row, 20 + col_idx, item)
+                self._table.setItem(row, 22 + col_idx, item)
             toku_item = SortableTableWidgetItem("●" if has_tokubetsu else "")
             toku_item.setTextAlignment(_ac)
-            self._table.setItem(row, 25, toku_item)
+            self._table.setItem(row, 27, toku_item)
             ikk_item = SortableTableWidgetItem("●" if has_ikkatsu else "")
             ikk_item.setTextAlignment(_ac)
-            self._table.setItem(row, 26, ikk_item)
+            self._table.setItem(row, 28, ikk_item)
             reg_item = SortableTableWidgetItem(
                 m.registered_date.strftime("%Y-%m-%d") if m.registered_date else ""
             )
             reg_item.setTextAlignment(_ac)
-            self._table.setItem(row, 27, reg_item)
+            self._table.setItem(row, 29, reg_item)
             change_dt = self._last_change_map.get(m.id)
             change_item = SortableTableWidgetItem(
                 change_dt.strftime("%Y-%m-%d") if change_dt else ""
             )
             change_item.setTextAlignment(_ac)
-            self._table.setItem(row, 28, change_item)
+            self._table.setItem(row, 30, change_item)
             last_dt = self._last_activity_map.get(m.id)
             last_item = SortableTableWidgetItem(
                 last_dt.strftime("%Y-%m-%d") if last_dt else ""
             )
             last_item.setTextAlignment(_ac)
-            self._table.setItem(row, 29, last_item)
-            self._table.setItem(row, 30, SortableTableWidgetItem(m.note or ""))
+            self._table.setItem(row, 31, last_item)
+            self._table.setItem(row, 32, SortableTableWidgetItem(m.note or ""))
         if not self._get_staff_setting("aggregate_sort_active", False):
             saved_col = self._get_staff_setting("sort_column", -1)
             saved_ord = Qt.SortOrder(self._get_staff_setting(
@@ -1182,7 +1184,7 @@ class MemberTab(QWidget):
         if not members:
             QMessageBox.warning(self, "ラベル出力", "出力する会員を選択してください（左端のチェックボックスで選択）。")
             return
-        LabelDialog(self._engine, members, parent=self).exec()
+        LabelDialog(self._engine, members, self._config, self._config_path, parent=self).exec()
 
     def _on_compose_email(self):
         from app.ui.dialogs.compose_email_dialog import ComposeEmailDialog

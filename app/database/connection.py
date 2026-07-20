@@ -80,6 +80,26 @@ def _migrate_registered_date(engine) -> None:
             conn.commit()
 
 
+def _migrate_mail_addressee_fields(engine) -> None:
+    """郵送先宛名を事業所名・所属役職名・氏名の3項目へ移行する。"""
+    with engine.connect() as conn:
+        cols = [r[1] for r in conn.execute(text("PRAGMA table_info(members)")).fetchall()]
+        if not cols:
+            return
+        for name in ("mail_org_name", "mail_dept_title", "mail_person_name"):
+            if name not in cols:
+                conn.execute(text(f"ALTER TABLE members ADD COLUMN {name} VARCHAR"))
+        # 旧「郵送先宛名」は情報を失わないよう郵送先事業所名に引き継ぐ。
+        if "addressee_mail" in cols:
+            conn.execute(text("""
+                UPDATE members
+                SET mail_org_name = addressee_mail
+                WHERE (mail_org_name IS NULL OR mail_org_name = '')
+                  AND addressee_mail IS NOT NULL AND addressee_mail != ''
+            """))
+        conn.commit()
+
+
 def _migrate_staff_signature(engine) -> None:
     """staff テーブルに signature カラムを追加する"""
     with engine.connect() as conn:
@@ -117,6 +137,7 @@ def get_engine(db_path: str):
     Base.metadata.create_all(engine)
     _migrate(engine)
     _migrate_registered_date(engine)
+    _migrate_mail_addressee_fields(engine)
     _migrate_staff_signature(engine)
     _ensure_indexes(engine)
     return engine

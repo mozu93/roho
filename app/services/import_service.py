@@ -43,32 +43,42 @@ DEFAULT_COL_MAP = {
     "postal_code_mail": 16,   # Q
     "address_mail":     17,   # R
     "address_mail2":    18,   # S  郵送先建物名等
-    "addressee_mail":   19,   # T
-    "employment_ins_no": 20,  # U
-    # 保険番号（V=21始まり、各2列＋フラグ2列）
-    "ins_ippan_branch":              21,
-    "ins_ippan_number":              22,
-    "ins_ippan_tokubetsu":           23,
-    "ins_ippan_ikkatsu":             24,
-    "ins_kensetsu_koyou_branch":     25,
-    "ins_kensetsu_koyou_number":     26,
-    "ins_kensetsu_koyou_tokubetsu":  27,
-    "ins_kensetsu_koyou_ikkatsu":    28,
-    "ins_ringyo_branch":             29,
-    "ins_ringyo_number":             30,
-    "ins_ringyo_tokubetsu":          31,
-    "ins_ringyo_ikkatsu":            32,
-    "ins_kensetsu_genba_branch":     33,
-    "ins_kensetsu_genba_number":     34,
-    "ins_kensetsu_genba_tokubetsu":  35,
-    "ins_kensetsu_genba_ikkatsu":    36,
-    "ins_kensetsu_jimusho_branch":   37,
-    "ins_kensetsu_jimusho_number":   38,
-    "ins_kensetsu_jimusho_tokubetsu": 39,
-    "ins_kensetsu_jimusho_ikkatsu":  40,
-    "note":              41,
-    "registered_date":   42,  # AN
+    "mail_org_name":    19,   # T
+    "mail_dept_title":  20,   # U
+    "mail_person_name": 21,   # V
+    "employment_ins_no": 22,  # W
+    # 保険番号（X=23始まり、各2列＋フラグ2列）
+    "ins_ippan_branch":              23,
+    "ins_ippan_number":              24,
+    "ins_ippan_tokubetsu":           25,
+    "ins_ippan_ikkatsu":             26,
+    "ins_kensetsu_koyou_branch":     27,
+    "ins_kensetsu_koyou_number":     28,
+    "ins_kensetsu_koyou_tokubetsu":  29,
+    "ins_kensetsu_koyou_ikkatsu":    30,
+    "ins_ringyo_branch":             31,
+    "ins_ringyo_number":             32,
+    "ins_ringyo_tokubetsu":          33,
+    "ins_ringyo_ikkatsu":            34,
+    "ins_kensetsu_genba_branch":     35,
+    "ins_kensetsu_genba_number":     36,
+    "ins_kensetsu_genba_tokubetsu":  37,
+    "ins_kensetsu_genba_ikkatsu":    38,
+    "ins_kensetsu_jimusho_branch":   39,
+    "ins_kensetsu_jimusho_number":   40,
+    "ins_kensetsu_jimusho_tokubetsu": 41,
+    "ins_kensetsu_jimusho_ikkatsu":  42,
+    "note":              43,
+    "registered_date":   44,  # AS
 }
+
+# 旧テンプレート（「郵送先宛名」1列）の取込互換用。旧宛名は郵送先事業所名へ移す。
+LEGACY_DEFAULT_COL_MAP = {
+    key: (idx - 2 if idx >= 22 else idx)
+    for key, idx in DEFAULT_COL_MAP.items()
+    if key not in ("mail_dept_title", "mail_person_name")
+}
+LEGACY_DEFAULT_COL_MAP["mail_org_name"] = 19
 
 INS_TYPE_KEYS = [
     ("ippan",            "ins_ippan"),
@@ -87,7 +97,7 @@ EXPORT_HEADERS = [
     "代表者名", "代表者フリガナ", "メール", "市外局番", "電話番号", "FAX市外局番", "FAX",
     "郵便番号", "住所", "建物名等",
     "郵送先郵便番号", "郵送先住所", "郵送先建物名等",
-    "郵送先宛名", "雇用保険事業所番号",
+    "郵送先事業所名", "郵送先所属・役職名", "郵送先氏名", "雇用保険事業所番号",
     "一般枝番", "一般番号", "一般特別加入", "一般一括",
     "建設他雇枝番", "建設他雇番号", "建設他雇特別", "建設他雇一括",
     "林業枝番", "林業番号", "林業特別", "林業一括",
@@ -110,9 +120,12 @@ class ImportService:
         overwrite: bool = False,
         staff_name: str = "インポート",
     ) -> dict:
-        col_map = col_map or DEFAULT_COL_MAP
         wb = openpyxl.load_workbook(path, data_only=True)
         ws = wb.active
+        if col_map is None:
+            headers = next(ws.iter_rows(min_row=1, max_row=1, values_only=True), ())
+            is_legacy = len(headers) > 19 and str(headers[19] or "").strip() == "郵送先宛名"
+            col_map = LEGACY_DEFAULT_COL_MAP if is_legacy else DEFAULT_COL_MAP
         result = {"added": 0, "updated": 0, "skipped": 0, "skipped_details": []}
 
         for row_idx, row in enumerate(ws.iter_rows(min_row=2, values_only=True), start=2):
@@ -178,7 +191,9 @@ class ImportService:
                 "address":           addr,
                 "postal_code_mail":  str(_get("postal_code_mail") or ""),
                 "address_mail":      addr_mail,
-                "addressee_mail":    str(_get("addressee_mail") or ""),
+                "mail_org_name":     str(_get("mail_org_name") or ""),
+                "mail_dept_title":   str(_get("mail_dept_title") or ""),
+                "mail_person_name":  str(_get("mail_person_name") or ""),
                 "employment_ins_no": str(_get("employment_ins_no") or ""),
                 "note":              str(_get("note") or ""),
                 "registered_date":   _parse_date(_get("registered_date")),
@@ -252,7 +267,9 @@ class ExportService:
                 m.postal_code_mail or "",
                 addr_mail_parts[0],
                 addr_mail_parts[1] if len(addr_mail_parts) > 1 else "",
-                m.addressee_mail or "",
+                m.mail_org_name or "",
+                m.mail_dept_title or "",
+                m.mail_person_name or "",
                 m.employment_ins_no or "",
             ] + ins_cols + [
                 m.note or "",

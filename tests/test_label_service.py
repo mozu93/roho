@@ -14,12 +14,15 @@ def engine():
         m1 = Member(
             member_number="9001", org_name="㈱テスト商事",
             postal_code="510-0001", address="四日市市1-1",
+            dept_title="総務部長", rep_name="鈴木一郎",
             is_active=True,
         )
         m2 = Member(
             member_number="9002", org_name="△△建設",
             postal_code_mail="510-0002", address_mail="鈴鹿市2-2",
-            addressee_mail="総務部　御中",
+            mail_org_name="総務部",
+            mail_dept_title="総務課",
+            mail_person_name="山田花子",
             is_active=True,
         )
         s.add_all([m1, m2])
@@ -50,6 +53,9 @@ def test_build_label_entry_fallback(svc, engine):
     entry = svc.build_label_entry(m)
     assert entry.postal_code == "510-0001"
     assert entry.address1 == "四日市市1-1"
+    assert entry.company_name == "㈱テスト商事"
+    assert entry.title == "総務部長"
+    assert entry.person_name == "鈴木一郎"
 
 def test_build_label_entry_uses_mail_address(svc, engine):
     with get_session(engine) as s:
@@ -58,7 +64,9 @@ def test_build_label_entry_uses_mail_address(svc, engine):
     entry = svc.build_label_entry(m)
     assert entry.postal_code == "510-0002"
     assert entry.address1 == "鈴鹿市2-2"
-    assert entry.company_name == "総務部　御中"
+    assert entry.company_name == "総務部"
+    assert entry.title == "総務課"
+    assert entry.person_name == "山田花子"
 
 def test_generate_pdf(svc, engine):
     members = svc.get_label_targets(active_only=True)

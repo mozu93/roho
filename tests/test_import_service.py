@@ -43,16 +43,16 @@ def _make_excel(rows):
 
 def test_import_new_members(engine):
     # A(0)=管理No.(無視), B(1)=会(○), C(2)=会員No,
-    # D(3)=事業所名, S(18)=雇用保険, T(19)=枝番0, U(20)=番号, AN(39)=メモ
-    row = [""] * 40
+    # D(3)=事業所名, W(22)=雇用保険, X(23)=枝番0, Y(24)=番号, AR(43)=メモ
+    row = [""] * 44
     row[1] = "○"             # 会員
     row[2] = "9001"
     row[3] = "テスト商事"
-    row[18] = "1234-567890-1"  # S: 雇用保険
-    row[19] = "0"              # T: 一般枝番
-    row[20] = "101"            # U: 一般番号
-    row[39] = "テストメモ"      # AN: メモ
-    path = _make_excel([[""] * 40, row])  # 1行目ヘッダー
+    row[22] = "1234-567890-1"  # W: 雇用保険
+    row[23] = "0"              # X: 一般枝番
+    row[24] = "101"            # Y: 一般番号
+    row[43] = "テストメモ"      # AR: メモ
+    path = _make_excel([[""] * 44, row])  # 1行目ヘッダー
     try:
         svc = ImportService(engine)
         result = svc.import_excel(path, overwrite=False, staff_name="山田")

@@ -23,7 +23,7 @@ COLS = [
     "No.", "会", "会員No.", "事業所名", "フリガナ", "所属・役職",
     "代表者名", "代表者フリガナ", "メール", "市外局番", "電話番号", "FAX市外局番", "FAX",
     "郵便番号", "住所",
-    "郵送先郵便番号", "郵送先住所", "郵送先宛名", "雇用保険事業所番号",
+    "郵送先郵便番号", "郵送先住所", "郵送先事業所名", "郵送先所属・役職名", "郵送先氏名", "雇用保険事業所番号",
     "0", "2", "4", "5", "6", "特別", "継続一括", "登録日", "最終対応日", "メモ",
 ]
 
@@ -332,7 +332,9 @@ class WithdrawnTab(QWidget):
                 m.address or "",
                 m.postal_code_mail or "",
                 m.address_mail or "",
-                m.addressee_mail or "",
+                m.mail_org_name or "",
+                m.mail_dept_title or "",
+                m.mail_person_name or "",
                 m.employment_ins_no or "",
             ]):
                 item = SortableTableWidgetItem(text)
@@ -351,30 +353,30 @@ class WithdrawnTab(QWidget):
                         item.setBackground(QBrush(QColor(226, 240, 217)))
                     elif entry.is_ikkatsu:
                         item.setBackground(QBrush(QColor(255, 224, 178)))
-                self._table.setItem(row, o + 19 + col_idx, item)
+                self._table.setItem(row, o + 21 + col_idx, item)
 
             toku = SortableTableWidgetItem("●" if has_tokubetsu else "")
             toku.setTextAlignment(_AC)
-            self._table.setItem(row, o + 24, toku)
+            self._table.setItem(row, o + 26, toku)
 
             ikk = SortableTableWidgetItem("●" if has_ikkatsu else "")
             ikk.setTextAlignment(_AC)
-            self._table.setItem(row, o + 25, ikk)
+            self._table.setItem(row, o + 27, ikk)
 
             reg_item = SortableTableWidgetItem(
                 m.registered_date.strftime("%Y-%m-%d") if m.registered_date else ""
             )
             reg_item.setTextAlignment(_AC)
-            self._table.setItem(row, o + 26, reg_item)
+            self._table.setItem(row, o + 28, reg_item)
 
             last_act = self._last_activity_map.get(m.id)
             act_item = SortableTableWidgetItem(
                 last_act.strftime("%Y-%m-%d") if last_act else ""
             )
             act_item.setTextAlignment(_AC)
-            self._table.setItem(row, o + 27, act_item)
+            self._table.setItem(row, o + 29, act_item)
 
-            self._table.setItem(row, o + 28, SortableTableWidgetItem(m.note or ""))
+            self._table.setItem(row, o + 30, SortableTableWidgetItem(m.note or ""))
 
         # 列幅適用
         self._resizing_programmatically = True
@@ -622,7 +624,7 @@ class WithdrawnTab(QWidget):
             QMessageBox.warning(self, "ラベル出力",
                 "出力する会員を選択してください（左端のチェックボックスで選択）。")
             return
-        LabelDialog(self._engine, members, parent=self).exec()
+        LabelDialog(self._engine, members, self._config, self._config_path, parent=self).exec()
 
     def _on_compose_email(self):
         from app.ui.dialogs.compose_email_dialog import ComposeEmailDialog

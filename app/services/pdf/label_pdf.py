@@ -82,7 +82,7 @@ LABEL_LAYOUTS: dict[str, LabelLayout] = {
         label_w_mm     = 70.0,
         label_h_mm     = 42.3,
         margin_top_mm  = 21.5,
-        margin_left_mm = 0.0,
+        margin_left_mm = 4.0,
         gap_h_mm       = 0.0,
         gap_v_mm       = 0.0,
         page_h_mm      = 296.9,
@@ -120,12 +120,15 @@ def _label_wh(layout: LabelLayout) -> tuple[float, float]:
     return layout.label_w_mm * mm, layout.label_h_mm * mm
 
 
-def _label_origin(col: int, row: int, layout: LabelLayout) -> tuple[float, float]:
+def _label_origin(
+    col: int, row: int, layout: LabelLayout,
+    offset_h_mm: float = 0.0, offset_v_mm: float = 0.0,
+) -> tuple[float, float]:
     page_h = layout.page_h_mm * mm
     lw = layout.label_w_mm  * mm
     lh = layout.label_h_mm  * mm
-    mt = layout.margin_top_mm  * mm
-    ml = layout.margin_left_mm * mm
+    mt = (layout.margin_top_mm + offset_v_mm) * mm
+    ml = (layout.margin_left_mm + offset_h_mm) * mm
     gh = layout.gap_h_mm * mm
     gv = layout.gap_v_mm * mm
     offsets = layout.col_offsets_mm or []
@@ -142,11 +145,15 @@ def generate_label_pdf(
     layout_key:      str  = DEFAULT_LAYOUT_KEY,
     font_key:        str  = DEFAULT_FONT_KEY,
     barcode_enabled: bool = False,
+    offset_h_mm:     float = 0.0,
+    offset_v_mm:     float = 0.0,
+    start_slot:      int = 0,
 ) -> str:
     layout = LABEL_LAYOUTS.get(layout_key) or LABEL_LAYOUTS[DEFAULT_LAYOUT_KEY]
     font   = FONT_OPTIONS.get(font_key, list(FONT_OPTIONS.values())[0])
     lw, lh = _label_wh(layout)
     per_page = layout.cols * layout.rows
+    start_slot = max(0, min(start_slot, per_page - 1))
 
     if isinstance(output_path, str):
         parent = os.path.dirname(output_path)
@@ -158,7 +165,7 @@ def generate_label_pdf(
     c = Canvas(output_path, pagesize=(page_w, page_h))
     c.setTitle("宛名ラベル")
 
-    slot = 0
+    slot = start_slot
     for entry in entries:
         if slot > 0 and slot % per_page == 0:
             c.showPage()
@@ -166,7 +173,7 @@ def generate_label_pdf(
         page_slot = slot % per_page
         col = page_slot % layout.cols
         row = page_slot // layout.cols
-        x0, y0 = _label_origin(col, row, layout)
+        x0, y0 = _label_origin(col, row, layout, offset_h_mm, offset_v_mm)
 
         mode = batch_mode if entry.entry_mode == "inherit" else entry.entry_mode
         _draw_label(c, entry, x0, y0, lw, lh, mode, font, barcode_enabled)
@@ -199,9 +206,22 @@ def _split_line(text: str, font: str, fs: float, max_w: float) -> tuple[str, str
     return text[:lo], text[lo:]
 
 
+_SAFETY_H = 3.0 * mm  # 印刷ズレを見込んだ左右の安全余白
+_SAFETY_V = 2.0 * mm  # 印刷ズレを見込んだ上下の安全余白
+
+
 def _draw_label(c, entry, x0: float, y0: float, w: float, h: float, mode: str,
                 font: str = "MSPGothic", barcode_enabled: bool = False):
     c.saveState()
+
+    # ラベル枠外への描画を防ぎ、プリンタのわずかなズレにも対応する。
+    clip = c.beginPath()
+    clip.rect(x0, y0, w, h)
+    c.clipPath(clip, stroke=0, fill=0)
+    x0 += _SAFETY_H
+    y0 += _SAFETY_V
+    w -= 2 * _SAFETY_H
+    h -= 2 * _SAFETY_V
 
     company      = entry.company_name or ""
     postal       = entry.postal_code  or ""

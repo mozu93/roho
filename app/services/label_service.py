@@ -49,24 +49,41 @@ class LabelService:
             return members
 
     def build_label_entry(self, member: Member) -> LabelEntry:
-        # 郵送先住所優先フォールバック
-        if member.postal_code_mail:
+        # 郵送先が登録されていれば必ず郵送先を優先し、なければ通常住所を使う。
+        has_mail_destination = bool(member.postal_code_mail or member.address_mail)
+        if has_mail_destination:
             postal = member.postal_code_mail
             addr1 = member.address_mail or ""
-            company = member.addressee_mail or member.org_name or ""
+            company = member.mail_org_name or member.org_name or ""
+            title = member.mail_dept_title or ""
+            person = member.mail_person_name or ""
+            if person:
+                entry_mode = "normal"
+            else:
+                # 氏名がなければ、事業所名宛として「御中」を付ける。
+                title = ""
+                entry_mode = "no_person"
         else:
             postal = member.postal_code or ""
             addr1 = member.address or ""
             company = member.org_name or ""
+            title = member.dept_title or ""
+            person = member.rep_name or ""
+            if person:
+                entry_mode = "normal"
+            else:
+                # 氏名がなければ、事業所名だけを事業所宛として出力する。
+                title = ""
+                entry_mode = "no_person"
         return LabelEntry(
             company_name=company,
             postal_code=postal,
             address1=addr1,
             address2="",
-            title="",
-            person_name="",
+            title=title,
+            person_name=person,
             barcode_address=addr1,
-            entry_mode="inherit",
+            entry_mode=entry_mode,
         )
 
     def generate_pdf(
@@ -77,6 +94,9 @@ class LabelService:
         font_key: str = "MSPゴシック",
         barcode_enabled: bool = False,
         batch_mode: str = "no_person",
+        offset_h_mm: float = 0.0,
+        offset_v_mm: float = 0.0,
+        start_slot: int = 0,
     ) -> str:
         from app.services.pdf.label_pdf import generate_label_pdf
         entries = [self.build_label_entry(m) for m in members]
@@ -87,4 +107,7 @@ class LabelService:
             layout_key=layout_key,
             font_key=font_key,
             barcode_enabled=barcode_enabled,
+            offset_h_mm=offset_h_mm,
+            offset_v_mm=offset_v_mm,
+            start_slot=start_slot,
         )

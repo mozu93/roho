@@ -15,6 +15,7 @@ class AppConfig:
     withdrawn_hidden_columns: list[str] = field(default_factory=list)
     member_column_widths: dict = field(default_factory=dict)
     staff_settings: dict = field(default_factory=dict)
+    label_offsets: dict = field(default_factory=dict)
     window_geometry: dict = field(default_factory=dict)
 
     @classmethod

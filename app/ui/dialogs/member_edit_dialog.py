@@ -158,7 +158,9 @@ class MemberEditDialog(QDialog):
         pcm_row.addWidget(pcm_lookup_btn)
         pcm_row.addStretch()
 
-        self._f_addressee_mail = QLineEdit()
+        self._f_mail_org_name = QLineEdit()
+        self._f_mail_dept_title = QLineEdit()
+        self._f_mail_person_name = QLineEdit()
         self._f_employment_ins_no = QLineEdit()
         self._f_note = QTextEdit()
         self._f_note.setFixedHeight(60)
@@ -186,7 +188,9 @@ class MemberEditDialog(QDialog):
         fl.addRow("住所", addr_layout)
         fl.addRow("郵送先郵便番号", pcm_row)
         fl.addRow("郵送先住所", addr_mail_layout)
-        fl.addRow("郵送先宛名", self._f_addressee_mail)
+        fl.addRow("郵送先事業所名", self._f_mail_org_name)
+        fl.addRow("郵送先所属・役職名", self._f_mail_dept_title)
+        fl.addRow("郵送先氏名", self._f_mail_person_name)
         fl.addRow("雇用保険事業所番号", self._f_employment_ins_no)
         fl.addRow("メモ", self._f_note)
         form_layout.addWidget(basic)
@@ -350,7 +354,9 @@ class MemberEditDialog(QDialog):
         addr_mail_lines = (m.address_mail or "").split("\n", 1)
         self._f_address_mail.setText(addr_mail_lines[0])
         self._f_address_mail2.setText(addr_mail_lines[1] if len(addr_mail_lines) > 1 else "")
-        self._f_addressee_mail.setText(m.addressee_mail or "")
+        self._f_mail_org_name.setText(m.mail_org_name or "")
+        self._f_mail_dept_title.setText(m.mail_dept_title or "")
+        self._f_mail_person_name.setText(m.mail_person_name or "")
         self._f_employment_ins_no.setText(m.employment_ins_no or "")
         self._f_note.setPlainText(m.note or "")
 
@@ -405,7 +411,9 @@ class MemberEditDialog(QDialog):
             "address_mail":      "\n".join(x for x in [
                                      self._f_address_mail.text().strip(),
                                      self._f_address_mail2.text().strip()] if x),
-            "addressee_mail":    self._f_addressee_mail.text().strip(),
+            "mail_org_name":     self._f_mail_org_name.text().strip(),
+            "mail_dept_title":   self._f_mail_dept_title.text().strip(),
+            "mail_person_name":  self._f_mail_person_name.text().strip(),
             "employment_ins_no": self._f_employment_ins_no.text().strip(),
             "note":              self._f_note.toPlainText().strip(),
             "insurance_entries": entries,

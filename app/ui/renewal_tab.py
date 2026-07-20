@@ -8,10 +8,12 @@ from PyQt6.QtWidgets import (
     QTableView, QFrame, QApplication, QGroupBox, QScrollArea, QTextEdit,
 )
 from PyQt6.QtCore import Qt, QEvent
+from PyQt6.QtGui import QFont
 from app.services.renewal_service import RenewalService, OVERALL_STATUSES
 from app.services.member_service import INS_TYPES
 from app.services.activity_service import ActivityService
 from app.ui.dialogs.renewal_edit_dialog import RenewalEditDialog, BRANCH_LABEL
+from app.ui.dialogs.activity_search_dialog import ActivitySearchDialog
 from app.ui.member_tab import (
     SortableTableWidgetItem, _SelectionDelegate, _CheckHeader, _FrozenCheckDelegate,
     _FrozenItemDelegate,
@@ -29,15 +31,15 @@ COLS = [
     "",
     "管理No.", "会", "会員No.", "事業所名", "フリガナ", "所属・役職",
     "代表者名", "代表者フリガナ", "メール", "市外局番", "電話番号", "FAX市外局番", "FAX",
-    "郵便番号", "住所", "郵送先郵便番号", "郵送先住所", "郵送先宛名", "雇用保険事業所番号",
+    "郵便番号", "住所", "郵送先郵便番号", "郵送先住所", "郵送先事業所名", "郵送先所属・役職名", "郵送先氏名", "雇用保険事業所番号",
 ] + [BRANCH_SHORT_LABEL[t] for t in INS_TYPES] + [
     "特別", "継続一括", "登録日", "最終更新日",
     "最終対応日（全体）", "メモ（全体）",
     "全体状況", "最終対応日（年度更新）", "メモ（年度更新）",
 ]
 _COL_SELECT = 0
-BRANCH_COL_START = 20  # "枝番0" の列インデックス（チェックボックス+先頭19列: 管理No.〜雇用保険事業所番号）
-_TAIL_START = BRANCH_COL_START + len(INS_TYPES)  # = 25: "特別" の列インデックス
+BRANCH_COL_START = 22  # "枝番0" の列インデックス（チェックボックス+先頭21列: 管理No.〜雇用保険事業所番号）
+_TAIL_START = BRANCH_COL_START + len(INS_TYPES)  # = 27: "特別" の列インデックス
 
 
 def _aggregate_sort_key(r):
@@ -69,6 +71,7 @@ class RenewalTab(QWidget):
         self._checked_ids: set[int] = set()
         self._last_checked_member_id: int = -1
         self._member_row_map: dict[int, int] = {}
+        self._submission_edit_mode = False
         self._freeze_col: int = self._get_staff_setting("renewal_freeze_col", 0)
         self._build_ui()
         self._apply_column_visibility()
@@ -93,34 +96,51 @@ class RenewalTab(QWidget):
 
     def _build_ui(self):
         layout = QVBoxLayout(self)
+        control_font = QFont(QApplication.instance().font())
+        control_font.setPointSize(control_font.pointSize() + 2)
 
         top_row = QHBoxLayout()
-        top_row.addWidget(QLabel("年度："))
+        year_label = QLabel("年度：")
+        year_label.setFont(control_font)
+        top_row.addWidget(year_label)
         self._year_combo = QComboBox()
         self._year_combo.currentIndexChanged.connect(self._refresh)
+        self._year_combo.setFont(control_font)
         top_row.addWidget(self._year_combo)
         gen_btn = QPushButton("対象生成")
+        gen_btn.setFont(control_font)
         gen_btn.clicked.connect(self._on_generate)
         top_row.addWidget(gen_btn)
+        self._submission_edit_btn = QPushButton("提出状況を編集")
+        self._submission_edit_btn.setFont(control_font)
+        self._submission_edit_btn.setCheckable(True)
+        self._submission_edit_btn.setToolTip(
+            "有効にしている間、枝番のセルをクリックすると提出状況を変更できます")
+        self._submission_edit_btn.toggled.connect(self._on_submission_edit_mode_toggled)
+        top_row.addWidget(self._submission_edit_btn)
         top_row.addStretch()
         col_setting_btn = QPushButton("表示列選択")
+        col_setting_btn.setFont(control_font)
         col_setting_btn.clicked.connect(self._exec_column_menu)
         top_row.addWidget(col_setting_btn)
-        agg_btn = QPushButton("集約並び替え")
-        agg_btn.clicked.connect(self._on_aggregate_sort)
-        top_row.addWidget(agg_btn)
         layout.addLayout(top_row)
 
         search_row = QHBoxLayout()
-        search_row.addWidget(QLabel("検索："))
+        search_label = QLabel("検索：")
+        search_label.setFont(control_font)
+        search_row.addWidget(search_label)
         self._search_edit = QLineEdit()
         self._search_edit.setPlaceholderText("事業所名・会員No.・管理No.")
         self._search_edit.textChanged.connect(self._refresh)
+        self._search_edit.setFont(control_font)
         search_row.addWidget(self._search_edit)
-        search_row.addWidget(QLabel("フィルタ："))
+        filter_label = QLabel("フィルタ：")
+        filter_label.setFont(control_font)
+        search_row.addWidget(filter_label)
         self._filter_combo = QComboBox()
         self._filter_combo.addItems(FILTERS)
         self._filter_combo.currentIndexChanged.connect(self._refresh)
+        self._filter_combo.setFont(control_font)
         search_row.addWidget(self._filter_combo)
         search_row.addStretch()
         layout.addLayout(search_row)
@@ -140,6 +160,11 @@ class RenewalTab(QWidget):
         self._table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self._table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self._table.setSortingEnabled(True)
+        table_font = QFont(QApplication.instance().font())
+        table_font.setPointSize(table_font.pointSize() + 2)
+        self._table.setFont(table_font)
+        self._table.setAlternatingRowColors(True)
+        self._table.verticalHeader().setDefaultSectionSize(30)
         self._check_header.setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
         self._check_header.setSectionsMovable(True)
         self._check_header.sortIndicatorChanged.connect(self._on_sort_changed)
@@ -171,9 +196,11 @@ class RenewalTab(QWidget):
         self._frozen_view.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         self._frozen_view.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self._frozen_view.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        self._frozen_view.setFont(table_font)
         self._frozen_view.setAlternatingRowColors(True)
         self._frozen_view.setFrameShape(QFrame.Shape.NoFrame)
         self._frozen_view.verticalHeader().setDefaultSectionSize(30)
+        self._frozen_view.horizontalHeader().setFont(table_font)
         self._frozen_view.setItemDelegate(_FrozenItemDelegate(self._frozen_view))
         self._frozen_view.setItemDelegateForColumn(
             _COL_SELECT, _FrozenCheckDelegate(self._checked_ids, self._frozen_view))
@@ -240,13 +267,40 @@ class RenewalTab(QWidget):
         layout.addLayout(content_layout)
 
         btn_row = QHBoxLayout()
-        btn_row.addStretch()
+
+        def _sep():
+            frame = QFrame()
+            frame.setFrameShape(QFrame.Shape.VLine)
+            frame.setFrameShadow(QFrame.Shadow.Sunken)
+            return frame
+
+        # 名簿タブと同じく、一覧に対する操作を下部へ集約する。
+        agg_btn = QPushButton("集約並び替え")
+        agg_btn.clicked.connect(self._on_aggregate_sort)
+        btn_row.addWidget(agg_btn)
+        btn_row.addWidget(_sep())
+
+        btn_row.addWidget(QLabel("選択:"))
+        self._filter_tokubetsu_chk = QCheckBox("特別加入")
+        self._filter_tokubetsu_chk.stateChanged.connect(self._apply_selection_filters)
+        btn_row.addWidget(self._filter_tokubetsu_chk)
+        self._filter_postal_chk = QCheckBox("郵送先あり")
+        self._filter_postal_chk.stateChanged.connect(self._apply_selection_filters)
+        btn_row.addWidget(self._filter_postal_chk)
+        btn_row.addWidget(_sep())
+
         label_btn = QPushButton("ラベル出力")
         label_btn.clicked.connect(self._on_label)
         btn_row.addWidget(label_btn)
         email_btn = QPushButton("メール送信")
         email_btn.clicked.connect(self._on_compose_email)
         btn_row.addWidget(email_btn)
+
+        btn_row.addStretch()
+
+        activity_search_btn = QPushButton("対応履歴検索")
+        activity_search_btn.clicked.connect(self._on_activity_search)
+        btn_row.addWidget(activity_search_btn)
         self._activity_toggle_btn = QPushButton("対応履歴 ≪")
         self._activity_toggle_btn.clicked.connect(self._on_toggle_activity_panel)
         btn_row.addWidget(self._activity_toggle_btn)
@@ -429,6 +483,9 @@ class RenewalTab(QWidget):
         self._activity_panel.setVisible(visible)
         self._activity_toggle_btn.setText("対応履歴 ≪" if visible else "対応履歴 ≫")
 
+    def _on_activity_search(self):
+        ActivitySearchDialog(self._engine, parent=self).exec()
+
     def _on_aggregate_sort(self):
         self._records.sort(key=_aggregate_sort_key)
         self._set_staff_setting("renewal_aggregate_sort_active", True)
@@ -475,7 +532,8 @@ class RenewalTab(QWidget):
         for delta, text in enumerate([
             m.tel_area or "", m.tel or "", m.fax_area or "", m.fax or "",
             m.postal_code or "", m.address or "",
-            m.postal_code_mail or "", m.address_mail or "", m.addressee_mail or "",
+            m.postal_code_mail or "", m.address_mail or "", m.mail_org_name or "",
+            m.mail_dept_title or "", m.mail_person_name or "",
             m.employment_ins_no or "",
         ]):
             item = SortableTableWidgetItem(text)
@@ -540,6 +598,8 @@ class RenewalTab(QWidget):
             self._set_staff_setting("renewal_aggregate_sort_active", False)
 
     def _on_cell_clicked(self, row, col):
+        if not self._submission_edit_mode:
+            return
         if col < BRANCH_COL_START or col >= BRANCH_COL_START + len(INS_TYPES):
             return
         cell = self._table.item(row, col)
@@ -562,6 +622,21 @@ class RenewalTab(QWidget):
         self._populate_row(row, renewal)
         self._table.setSortingEnabled(True)
         self._rebuild_member_row_map()
+
+    def _on_submission_edit_mode_toggled(self, enabled: bool):
+        """提出状況をクリックで変更するモードを明示的に切り替える。"""
+        self._submission_edit_mode = enabled
+        if enabled:
+            self._submission_edit_btn.setText("提出状況を編集中（クリックで変更）")
+            self._submission_edit_btn.setStyleSheet(
+                "QPushButton { background: #c62828; color: white; font-weight: bold; }")
+            self._table.setStyleSheet(
+                "QTableWidget#renewalTable::item:hover { background: #ffcdd2; color: #1a1a1a; }")
+        else:
+            self._submission_edit_btn.setText("提出状況を編集")
+            self._submission_edit_btn.setStyleSheet("")
+            self._table.setStyleSheet(
+                "QTableWidget#renewalTable::item:hover { background: #ffe4ec; color: #1a1a1a; }")
 
     def _on_row_double_clicked(self, index):
         item = self._table.item(index.row(), 1)
@@ -783,6 +858,37 @@ class RenewalTab(QWidget):
                     chk.blockSignals(False)
         self._frozen_view.viewport().update()
 
+    def _apply_selection_filters(self):
+        """名簿タブと同じ選択条件で、ラベル・メール対象をまとめて選ぶ。"""
+        want_tokubetsu = self._filter_tokubetsu_chk.isChecked()
+        want_postal = self._filter_postal_chk.isChecked()
+        self._checked_ids.clear()
+        if want_tokubetsu or want_postal:
+            for record in self._records:
+                member = record.member
+                if want_tokubetsu and not any(
+                    entry.is_tokubetsu for entry in member.insurance_entries
+                ):
+                    continue
+                if want_postal and not (member.postal_code_mail or member.address_mail):
+                    continue
+                self._checked_ids.add(member.id)
+
+        for row in range(self._table.rowCount()):
+            container = self._table.cellWidget(row, _COL_SELECT)
+            item = self._table.item(row, _COL_SELECT)
+            member_id = item.data(Qt.ItemDataRole.UserRole) if item else None
+            if container and member_id is not None:
+                checkbox = container.findChild(QCheckBox)
+                if checkbox:
+                    checkbox.blockSignals(True)
+                    checkbox.setChecked(member_id in self._checked_ids)
+                    checkbox.blockSignals(False)
+
+        all_on = bool(self._checked_ids) and len(self._checked_ids) == len(self._records)
+        self._check_header.set_all_checked(all_on)
+        self._frozen_view.viewport().update()
+
     def _on_check_changed(self, member_id: int, state: int):
         new_checked = (state == Qt.CheckState.Checked.value)
         mods = QApplication.keyboardModifiers()
@@ -849,7 +955,7 @@ class RenewalTab(QWidget):
             QMessageBox.warning(
                 self, "ラベル出力", "出力する事業所を選択してください（左端のチェックボックスで選択）。")
             return
-        LabelDialog(self._engine, members, parent=self).exec()
+        LabelDialog(self._engine, members, self._config, self._config_path, parent=self).exec()
 
     def _on_compose_email(self):
         from app.ui.dialogs.compose_email_dialog import ComposeEmailDialog
