@@ -241,6 +241,20 @@ class ActivityService:
             session.expunge_all()
             return cat
 
+    def get_or_create_category(self, name: str) -> ActivityCategory:
+        """名前に対応するカテゴリを返し、未登録なら追加する。"""
+        with get_session(self._engine) as session:
+            cat = session.query(ActivityCategory).filter_by(name=name).first()
+            if cat is None:
+                cat = ActivityCategory(
+                    name=name,
+                    sort_order=session.query(ActivityCategory).count(),
+                )
+                session.add(cat)
+                session.flush()
+            session.expunge_all()
+            return cat
+
     def delete_category(self, category_id: int) -> None:
         with get_session(self._engine) as session:
             cat = session.get(ActivityCategory, category_id)

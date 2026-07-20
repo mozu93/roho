@@ -11,12 +11,14 @@ from app.services.activity_service import ActivityService
 
 
 class ActivityLogDialog(QDialog):
-    def __init__(self, engine, member_id: int, staff_name: str, org_name: str = "", parent=None, readonly: bool = False):
+    def __init__(self, engine, member_id: int, staff_name: str, org_name: str = "", parent=None,
+                 readonly: bool = False, default_category_name: str | None = None):
         super().__init__(parent)
         self._engine = engine
         self._member_id = member_id
         self._staff_name = staff_name
         self._readonly = readonly
+        self._default_category_name = default_category_name
         self._svc = ActivityService(engine)
         self.setWindowTitle(f"対応履歴 - {org_name}")
         self.resize(560, 520)
@@ -51,6 +53,8 @@ class ActivityLogDialog(QDialog):
             for cat in self._svc.get_categories():
                 chk = QCheckBox(cat.name)
                 chk.setProperty("cat_id", cat.id)
+                if cat.name == self._default_category_name:
+                    chk.setChecked(True)
                 self._cat_checks.append(chk)
                 cat_row.addWidget(chk)
             cat_row.addStretch()
@@ -135,7 +139,7 @@ class ActivityLogDialog(QDialog):
             self._svc.add_log(self._member_id, content, cat_ids, self._staff_name)
             self._content_edit.clear()
             for chk in self._cat_checks:
-                chk.setChecked(False)
+                chk.setChecked(chk.text() == self._default_category_name)
             self._load_logs()
         except Exception as e:
             QMessageBox.critical(self, "エラー", str(e))

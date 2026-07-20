@@ -105,7 +105,7 @@ class RenewalEditDialog(QDialog):
         activity_btn.clicked.connect(self._on_open_activity_log)
         cfl.addRow(self._f_has_contact)
         cfl.addRow("最終対応日", self._f_last_contacted)
-        cfl.addRow("備考", self._f_note)
+        cfl.addRow("メモ", self._f_note)
         cfl.addRow(activity_btn)
         form_layout.addWidget(contact_group)
 
@@ -158,9 +158,12 @@ class RenewalEditDialog(QDialog):
 
     def _on_open_activity_log(self):
         from app.ui.dialogs.activity_log_dialog import ActivityLogDialog
+        from app.services.activity_service import ActivityService
+        ActivityService(self._engine).get_or_create_category("年度更新について")
         ActivityLogDialog(
             self._engine, self._member.id, self._staff_name,
             self._member.org_name, parent=self,
+            default_category_name="年度更新について",
         ).exec()
 
     def _on_save(self):

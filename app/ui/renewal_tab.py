@@ -1,10 +1,11 @@
 # app/ui/renewal_tab.py
+import html
 from datetime import datetime
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QComboBox, QLineEdit, QPushButton,
     QTableWidget, QTableWidgetItem, QAbstractItemView, QHeaderView,
     QLabel, QMessageBox, QInputDialog, QMenu, QDialog, QGridLayout, QCheckBox,
-    QTableView, QFrame, QApplication,
+    QTableView, QFrame, QApplication, QGroupBox, QScrollArea, QTextEdit,
 )
 from PyQt6.QtCore import Qt, QEvent
 from app.services.renewal_service import RenewalService, OVERALL_STATUSES
@@ -22,6 +23,7 @@ BRANCH_SHORT_LABEL = {
     "kensetsu_genba": "枝番5", "kensetsu_jimusho": "枝番6",
 }
 _AC = Qt.AlignmentFlag.AlignCenter
+_RENEWAL_CATEGORY_NAME = "年度更新について"
 
 COLS = [
     "",
@@ -31,7 +33,7 @@ COLS = [
 ] + [BRANCH_SHORT_LABEL[t] for t in INS_TYPES] + [
     "特別", "継続一括", "登録日", "最終更新日",
     "最終対応日（全体）", "メモ（全体）",
-    "全体状況", "最終対応日（年度更新）", "備考（年度更新）",
+    "全体状況", "最終対応日（年度更新）", "メモ（年度更新）",
 ]
 _COL_SELECT = 0
 BRANCH_COL_START = 20  # "枝番0" の列インデックス（チェックボックス+先頭19列: 管理No.〜雇用保険事業所番号）
@@ -58,6 +60,8 @@ class RenewalTab(QWidget):
         self._config_path = config_path
         self._svc = RenewalService(engine)
         self._activity_svc = ActivityService(engine)
+        self._renewal_category = self._activity_svc.get_or_create_category(
+            _RENEWAL_CATEGORY_NAME)
         self._last_activity_map: dict = {}
         self._last_change_map: dict = {}
         self._resizing_programmatically = False
@@ -121,6 +125,8 @@ class RenewalTab(QWidget):
         search_row.addStretch()
         layout.addLayout(search_row)
 
+        content_layout = QHBoxLayout()
+
         self._table = QTableWidget()
         self._table.setObjectName("renewalTable")
         self._table.setStyleSheet(
@@ -151,7 +157,8 @@ class RenewalTab(QWidget):
         self._resizing_programmatically = False
         self._table.doubleClicked.connect(self._on_row_double_clicked)
         self._table.cellClicked.connect(self._on_cell_clicked)
-        layout.addWidget(self._table)
+        self._table.itemSelectionChanged.connect(self._on_selection_changed)
+        content_layout.addWidget(self._table, stretch=2)
 
         # 列固定オーバーレイ
         self._frozen_view = QTableView(self._table)
@@ -184,6 +191,54 @@ class RenewalTab(QWidget):
 
         self._table.installEventFilter(self)
 
+        self._activity_panel = QGroupBox("対応履歴")
+        self._activity_panel.setFixedWidth(380)
+        panel_layout = QVBoxLayout(self._activity_panel)
+        self._placeholder_label = QLabel("年度更新一覧から事業所を選択してください。")
+        self._placeholder_label.setAlignment(_AC)
+        panel_layout.addWidget(self._placeholder_label)
+
+        self._activity_content = QWidget()
+        content_vbox = QVBoxLayout(self._activity_content)
+        content_vbox.setContentsMargins(0, 0, 0, 0)
+        input_group = QGroupBox("新規対応メモを追加")
+        input_layout = QVBoxLayout(input_group)
+        cat_row = QHBoxLayout()
+        cat_row.addWidget(QLabel("カテゴリ："))
+        self._cat_combo = QComboBox()
+        for cat in self._activity_svc.get_categories():
+            self._cat_combo.addItem(cat.name, cat.id)
+        self._select_renewal_category()
+        cat_row.addWidget(self._cat_combo)
+        cat_row.addStretch()
+        input_layout.addLayout(cat_row)
+        self._content_edit = QTextEdit()
+        self._content_edit.setFixedHeight(160)
+        self._content_edit.setPlaceholderText("対応内容を入力してください")
+        input_layout.addWidget(self._content_edit)
+        save_row = QHBoxLayout()
+        save_btn = QPushButton("保存")
+        save_btn.clicked.connect(self._on_save_activity)
+        save_row.addStretch()
+        save_row.addWidget(save_btn)
+        input_layout.addLayout(save_row)
+        content_vbox.addWidget(input_group, stretch=1)
+
+        log_scroll = QScrollArea()
+        log_scroll.setWidgetResizable(True)
+        log_scroll.setFrameShape(QFrame.Shape.NoFrame)
+        self._log_container = QWidget()
+        self._log_vbox = QVBoxLayout(self._log_container)
+        self._log_vbox.setAlignment(Qt.AlignmentFlag.AlignTop)
+        self._log_vbox.setContentsMargins(0, 0, 0, 0)
+        self._log_vbox.setSpacing(0)
+        log_scroll.setWidget(self._log_container)
+        content_vbox.addWidget(log_scroll, stretch=2)
+        panel_layout.addWidget(self._activity_content)
+        self._activity_content.setVisible(False)
+        content_layout.addWidget(self._activity_panel)
+        layout.addLayout(content_layout)
+
         btn_row = QHBoxLayout()
         btn_row.addStretch()
         label_btn = QPushButton("ラベル出力")
@@ -192,6 +247,9 @@ class RenewalTab(QWidget):
         email_btn = QPushButton("メール送信")
         email_btn.clicked.connect(self._on_compose_email)
         btn_row.addWidget(email_btn)
+        self._activity_toggle_btn = QPushButton("対応履歴 ≪")
+        self._activity_toggle_btn.clicked.connect(self._on_toggle_activity_panel)
+        btn_row.addWidget(self._activity_toggle_btn)
         layout.addLayout(btn_row)
 
     def _current_fiscal_year(self):
@@ -208,6 +266,7 @@ class RenewalTab(QWidget):
         self._refresh()
 
     def _refresh(self):
+        selected_member_id = self._current_selected_member_id()
         fiscal_year = self._current_fiscal_year()
         self._table.setRowCount(0)
         if fiscal_year is None:
@@ -224,6 +283,7 @@ class RenewalTab(QWidget):
         self._last_activity_map = self._activity_svc.get_last_logged_at_map(member_ids)
         self._last_change_map = self._activity_svc.get_last_changed_at_map(member_ids)
         self._fill_table(records)
+        self._restore_row_selection(selected_member_id)
 
     def _fill_table(self, records):
         self._table.setSortingEnabled(False)
@@ -262,6 +322,112 @@ class RenewalTab(QWidget):
                 self._resizing_programmatically = False
         self._update_frozen_view_geometry()
         self._rebuild_member_row_map()
+
+    def _current_selected_member_id(self):
+        rows = self._table.selectionModel().selectedRows()
+        if not rows:
+            return None
+        item = self._table.item(rows[0].row(), _COL_SELECT)
+        return item.data(Qt.ItemDataRole.UserRole) if item else None
+
+    def _restore_row_selection(self, member_id):
+        if member_id is None:
+            return
+        row = self._find_row_by_member_id(member_id)
+        if row >= 0:
+            self._table.selectRow(row)
+
+    def _selected_member(self):
+        member_id = self._current_selected_member_id()
+        if member_id is None:
+            return None
+        return next((r.member for r in self._records if r.member.id == member_id), None)
+
+    def _select_renewal_category(self):
+        index = self._cat_combo.findData(self._renewal_category.id)
+        if index >= 0:
+            self._cat_combo.setCurrentIndex(index)
+
+    def _on_selection_changed(self):
+        member = self._selected_member()
+        if member is None:
+            self._placeholder_label.setVisible(True)
+            self._activity_content.setVisible(False)
+            self._activity_panel.setTitle("対応履歴")
+            return
+        self._placeholder_label.setVisible(False)
+        self._activity_content.setVisible(True)
+        self._activity_panel.setTitle(f"対応履歴 - {member.org_name}")
+        self._load_activity_logs(member.id)
+
+    def _load_activity_logs(self, member_id):
+        while self._log_vbox.count():
+            item = self._log_vbox.takeAt(0)
+            widget = item.widget()
+            if widget:
+                widget.setParent(None)
+
+        logs = self._activity_svc.get_logs(member_id)
+        for log in logs:
+            cat_names = "・".join(c.name for c in log.categories) if log.categories else "カテゴリなし"
+            entry = QWidget()
+            entry.setStyleSheet("background: white; border-bottom: 1px solid #e0e0e0;")
+            entry_layout = QVBoxLayout(entry)
+            entry_layout.setContentsMargins(8, 8, 8, 8)
+            header_row = QHBoxLayout()
+            header = QLabel(
+                f"<b>{log.logged_at.strftime('%Y-%m-%d %H:%M')}</b>　{html.escape(log.logged_by)}　"
+                f"<span style='color:#666'>[{html.escape(cat_names)}]</span>"
+            )
+            header_row.addWidget(header)
+            header_row.addStretch()
+            delete_btn = QPushButton("削除")
+            delete_btn.setFixedWidth(50)
+            delete_btn.clicked.connect(
+                lambda _, log_id=log.id: self._on_delete_activity_log(log_id))
+            header_row.addWidget(delete_btn)
+            content = QLabel(log.content)
+            content.setTextFormat(Qt.TextFormat.PlainText)
+            content.setWordWrap(True)
+            entry_layout.addLayout(header_row)
+            entry_layout.addWidget(content)
+            self._log_vbox.addWidget(entry)
+
+        if not logs:
+            self._log_vbox.addWidget(QLabel("対応履歴はありません。"))
+
+    def _on_save_activity(self):
+        member = self._selected_member()
+        if member is None:
+            return
+        content = self._content_edit.toPlainText().strip()
+        if not content:
+            QMessageBox.warning(self, "入力エラー", "内容を入力してください。")
+            return
+        try:
+            self._activity_svc.add_log(
+                member.id, content, [self._cat_combo.currentData()],
+                self._config.last_staff_name,
+            )
+            self._content_edit.clear()
+            self._select_renewal_category()
+            self._refresh()
+        except Exception as e:
+            QMessageBox.critical(self, "エラー", str(e))
+
+    def _on_delete_activity_log(self, log_id):
+        reply = QMessageBox.question(
+            self, "確認", "この対応履歴を削除しますか？",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+        )
+        if reply == QMessageBox.StandardButton.Yes:
+            self._activity_svc.delete_log(log_id)
+            self._refresh()
+
+    def _on_toggle_activity_panel(self):
+        visible = not self._activity_panel.isVisible()
+        self._activity_panel.setVisible(visible)
+        self._activity_toggle_btn.setText("対応履歴 ≪" if visible else "対応履歴 ≫")
 
     def _on_aggregate_sort(self):
         self._records.sort(key=_aggregate_sort_key)
