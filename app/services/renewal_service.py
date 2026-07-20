@@ -1,6 +1,7 @@
 from datetime import date, datetime
 from app.database.connection import get_session
 from app.database.models import AnnualRenewal, AnnualRenewalItem, Member
+from app.utils.member_search import member_matches_keyword
 
 SUBMISSION_STATUSES = ["未提出", "提出済", "不備あり", "対象外"]
 OVERALL_STATUSES = ["未提出", "一部提出", "提出済", "不備あり", "完了"]
@@ -130,12 +131,6 @@ class RenewalService:
                 .join(Member, AnnualRenewal.member_id == Member.id)
                 .filter(AnnualRenewal.fiscal_year == fiscal_year)
             )
-            if keyword:
-                kw = f"%{keyword}%"
-                cond = Member.org_name.like(kw) | Member.member_number.like(kw)
-                if keyword.isdigit():
-                    cond = cond | (Member.company_code == int(keyword))
-                q = q.filter(cond)
             if status_filter:
                 q = q.filter(AnnualRenewal.overall_status == status_filter)
 
@@ -144,6 +139,8 @@ class RenewalService:
                 _ = r.member
                 _ = r.member.insurance_entries
                 _ = r.items
+            if keyword:
+                records = [r for r in records if member_matches_keyword(r.member, keyword)]
             session.expunge_all()
             return records
 

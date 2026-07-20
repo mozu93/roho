@@ -208,6 +208,18 @@ def test_search_by_keyword(svc):
     assert results[0].member.org_name == "㈱テスト商事"
 
 
+def test_search_normalizes_kana_and_searches_member_basic_fields(svc):
+    with get_session(svc._engine) as session:
+        session.add(Member(
+            member_number="9001", org_name="テスト商事", org_kana="ﾃｽﾄｼｮｳｼﾞ",
+            mail_person_name="鈴木花子", is_active=True, is_member=True,
+        ))
+    svc.generate_records(2026)
+
+    assert len(svc.search(2026, keyword="テストショウジ")) == 1
+    assert len(svc.search(2026, keyword="鈴木")) == 1
+
+
 def test_search_filter_by_overall_status(svc):
     with get_session(svc._engine) as session:
         m1 = Member(member_number="9001", org_name="A社", is_active=True, is_member=True)

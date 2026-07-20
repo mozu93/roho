@@ -61,6 +61,22 @@ def test_search_by_rep_name_and_kana(svc):
     assert by_kana[0].org_name == "△△建設"
 
 
+def test_search_normalizes_kana_and_covers_all_basic_fields(svc):
+    svc.create({
+        "member_number": "9001", "org_name": "テスト商事", "org_kana": "ﾃｽﾄｼｮｳｼﾞ",
+        "dept_title": "営業部", "rep_name": "山田太郎", "email": "info@example.jp",
+        "fax": "059-123-4567", "postal_code_mail": "514-0001",
+        "address_mail": "津市丸之内1-2", "mail_org_name": "郵送先株式会社",
+        "mail_dept_title": "総務課", "mail_person_name": "鈴木花子",
+        "employment_ins_no": "1234-567890-1", "note": "要確認", "insurance_entries": [],
+    }, "山田")
+
+    # 全角/半角、ひらがな/カタカナを区別せず、基本情報の各項目を検索できる。
+    for keyword in ("テストショウジ", "てすと", "営業部", "info@example.jp", "丸之内",
+                    "郵送先", "総務課", "鈴木", "1234-567890-1", "要確認"):
+        assert len(svc.search(keyword=keyword)) == 1
+
+
 def test_search_by_ins_type(svc):
     svc.create({"member_number": "9001", "org_name": "A社", "insurance_entries": [
         {"ins_type": "ippan", "branch_number": "0", "ins_number": "101",

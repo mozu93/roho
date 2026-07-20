@@ -130,7 +130,7 @@ class RenewalTab(QWidget):
         search_label.setFont(control_font)
         search_row.addWidget(search_label)
         self._search_edit = QLineEdit()
-        self._search_edit.setPlaceholderText("事業所名・会員No.・管理No.")
+        self._search_edit.setPlaceholderText("基本情報・保険番号・メモを検索（全半角カナ対応）")
         self._search_edit.textChanged.connect(self._refresh)
         self._search_edit.setFont(control_font)
         search_row.addWidget(self._search_edit)

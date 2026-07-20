@@ -293,7 +293,7 @@ class MemberTab(QWidget):
         search_row.addWidget(add_btn)
 
         self._keyword_edit = QLineEdit()
-        self._keyword_edit.setPlaceholderText("事業所名・フリガナ・代表者名・代表者フリガナ・住所・電話番号で検索")
+        self._keyword_edit.setPlaceholderText("基本情報・保険番号・メモを検索（全半角カナ対応）")
         self._keyword_edit.textChanged.connect(self._refresh)
         self._keyword_edit.setFont(search_font)
         search_row.addWidget(self._keyword_edit)

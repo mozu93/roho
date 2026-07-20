@@ -5,6 +5,7 @@ from app.database.connection import get_session
 from app.database.models import (
     Member, InsuranceEntry, MemberChange, ChangeConfirmation, Staff, AnnualFeeRecord,
 )
+from app.utils.member_search import member_matches_keyword
 
 INS_TYPES = ["ippan", "kensetsu_koyou", "ringyo", "kensetsu_genba", "kensetsu_jimusho"]
 
@@ -28,16 +29,6 @@ class MemberService:
                 q = q.filter(Member.is_active == False)
             elif active_only:
                 q = q.filter(Member.is_active == True)
-            if keyword:
-                kw = f"%{keyword}%"
-                q = q.filter(
-                    Member.org_name.like(kw)
-                    | Member.org_kana.like(kw)
-                    | Member.rep_name.like(kw)
-                    | Member.rep_kana.like(kw)
-                    | Member.address.like(kw)
-                    | Member.tel.like(kw)
-                )
             if ins_types:
                 q = q.filter(
                     Member.insurance_entries.any(InsuranceEntry.ins_type.in_(ins_types))
@@ -53,6 +44,8 @@ class MemberService:
             results = q.distinct().order_by(Member.member_number).all()
             for m in results:
                 _ = m.insurance_entries  # eager load
+            if keyword:
+                results = [m for m in results if member_matches_keyword(m, keyword)]
             session.expunge_all()
             return results
 
