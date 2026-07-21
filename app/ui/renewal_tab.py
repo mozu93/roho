@@ -35,7 +35,7 @@ COLS = [
 ] + [BRANCH_SHORT_LABEL[t] for t in INS_TYPES] + [
     "特別", "継続一括", "登録日", "最終更新日",
     "最終対応日（全体）", "メモ（全体）",
-    "全体状況", "最終対応日（年度更新）", "メモ（年度更新）",
+    "全体状況", "メモ（年度更新）", "最終更新日（年度更新）",
 ]
 _COL_SELECT = 0
 BRANCH_COL_START = 22  # "枝番0" の列インデックス（チェックボックス+先頭21列: 管理No.〜雇用保険事業所番号）
@@ -598,8 +598,9 @@ class RenewalTab(QWidget):
 
         self._table.setItem(row, _TAIL_START + 6, SortableTableWidgetItem(r.overall_status or ""))
         self._table.setItem(row, _TAIL_START + 7, SortableTableWidgetItem(
+            (r.note or "")[:30]))
+        self._table.setItem(row, _TAIL_START + 8, SortableTableWidgetItem(
             r.last_contacted_at.strftime("%Y-%m-%d") if r.last_contacted_at else ""))
-        self._table.setItem(row, _TAIL_START + 8, SortableTableWidgetItem((r.note or "")[:30]))
 
     def _on_sort_changed(self, logical_col: int, order):
         self._frozen_view.horizontalHeader().setSortIndicator(logical_col, order)

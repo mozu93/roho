@@ -16,6 +16,9 @@ BRANCH_LABEL = {
     "ringyo": "枝番4（林業・労災）", "kensetsu_genba": "枝番5（建設業・現場）",
     "kensetsu_jimusho": "枝番6（建設業・事務所）",
 }
+EDITABLE_SUBMISSION_STATUSES = [
+    status for status in SUBMISSION_STATUSES if status != "対象外"
+]
 
 
 class RenewalEditDialog(QDialog):
@@ -48,33 +51,33 @@ class RenewalEditDialog(QDialog):
         item_group = QGroupBox("枝番別提出状況")
         ifl = QFormLayout(item_group)
         self._status_fields = {}
-        self._has_confirmed_fields = {}
         self._confirmed_fields = {}
-        member_ins_types = {e.ins_type for e in self._member.insurance_entries}
+        insurance_entries = {
+            entry.ins_type: entry for entry in self._member.insurance_entries
+        }
         for ins_type in INS_TYPES:
-            if ins_type not in member_ins_types:
+            entry = insurance_entries.get(ins_type)
+            if entry is None:
                 continue
             status_combo = QComboBox()
-            status_combo.addItems(SUBMISSION_STATUSES)
+            status_combo.addItems(EDITABLE_SUBMISSION_STATUSES)
             status_combo.currentIndexChanged.connect(self._recalculate)
 
-            has_confirmed = QCheckBox("確認日あり")
             confirmed_edit = QDateEdit(QDate.currentDate())
             confirmed_edit.setCalendarPopup(True)
             confirmed_edit.setDisplayFormat("yyyy-MM-dd")
-            confirmed_edit.setEnabled(False)
-            has_confirmed.toggled.connect(confirmed_edit.setEnabled)
 
             row = QHBoxLayout()
             row.addWidget(status_combo)
-            row.addWidget(has_confirmed)
             row.addWidget(confirmed_edit)
             wrapper = QWidget()
             wrapper.setLayout(row)
-            ifl.addRow(BRANCH_LABEL[ins_type], wrapper)
+            label = BRANCH_LABEL[ins_type]
+            if entry.ins_number:
+                label = f"{label}（番号: {entry.ins_number}）"
+            ifl.addRow(label, wrapper)
 
             self._status_fields[ins_type] = status_combo
-            self._has_confirmed_fields[ins_type] = has_confirmed
             self._confirmed_fields[ins_type] = confirmed_edit
         form_layout.addWidget(item_group)
 
@@ -92,22 +95,12 @@ class RenewalEditDialog(QDialog):
         ofl.addRow("全体状況", self._f_overall_status)
         form_layout.addWidget(overall_group)
 
-        contact_group = QGroupBox("対応記録")
-        cfl = QFormLayout(contact_group)
-        self._f_has_contact = QCheckBox("最終対応日あり")
-        self._f_last_contacted = QDateEdit(QDate.currentDate())
-        self._f_last_contacted.setCalendarPopup(True)
-        self._f_last_contacted.setEnabled(False)
-        self._f_has_contact.toggled.connect(self._f_last_contacted.setEnabled)
+        note_group = QGroupBox("メモ（年度更新）")
+        note_layout = QVBoxLayout(note_group)
         self._f_note = QTextEdit()
-        self._f_note.setFixedHeight(60)
-        activity_btn = QPushButton("対応履歴")
-        activity_btn.clicked.connect(self._on_open_activity_log)
-        cfl.addRow(self._f_has_contact)
-        cfl.addRow("最終対応日", self._f_last_contacted)
-        cfl.addRow("メモ", self._f_note)
-        cfl.addRow(activity_btn)
-        form_layout.addWidget(contact_group)
+        self._f_note.setMinimumHeight(140)
+        note_layout.addWidget(self._f_note, 1)
+        form_layout.addWidget(note_group)
 
         scroll.setWidget(container)
         main_layout.addWidget(scroll)
@@ -131,7 +124,6 @@ class RenewalEditDialog(QDialog):
             idx = self._status_fields[item.branch_type].findText(item.submission_status)
             self._status_fields[item.branch_type].setCurrentIndex(idx if idx >= 0 else 0)
             if item.confirmed_at:
-                self._has_confirmed_fields[item.branch_type].setChecked(True)
                 self._confirmed_fields[item.branch_type].setDate(QDate(
                     item.confirmed_at.year, item.confirmed_at.month, item.confirmed_at.day))
 
@@ -140,10 +132,6 @@ class RenewalEditDialog(QDialog):
             idx = self._f_overall_status.findText(r.overall_status)
             self._f_overall_status.setCurrentIndex(idx if idx >= 0 else 0)
 
-        if r.last_contacted_at:
-            self._f_has_contact.setChecked(True)
-            self._f_last_contacted.setDate(QDate(
-                r.last_contacted_at.year, r.last_contacted_at.month, r.last_contacted_at.day))
         self._f_note.setPlainText(r.note or "")
 
         self._recalculate()
@@ -156,38 +144,37 @@ class RenewalEditDialog(QDialog):
             idx = self._f_overall_status.findText(auto_status)
             self._f_overall_status.setCurrentIndex(idx if idx >= 0 else 0)
 
-    def _on_open_activity_log(self):
-        from app.ui.dialogs.activity_log_dialog import ActivityLogDialog
-        from app.services.activity_service import ActivityService
-        ActivityService(self._engine).get_or_create_category("年度更新について")
-        ActivityLogDialog(
-            self._engine, self._member.id, self._staff_name,
-            self._member.org_name, parent=self,
-            default_category_name="年度更新について",
-        ).exec()
-
     def _on_save(self):
         items_data = {}
+        tracked_change = False
+        existing_items = {item.branch_type: item for item in self._renewal.items}
         for ins_type, combo in self._status_fields.items():
-            confirmed_at = None
-            if self._has_confirmed_fields[ins_type].isChecked():
-                qd = self._confirmed_fields[ins_type].date()
-                confirmed_at = date(qd.year(), qd.month(), qd.day())
+            qd = self._confirmed_fields[ins_type].date()
+            confirmed_at = date(qd.year(), qd.month(), qd.day())
+            existing_item = existing_items.get(ins_type)
+            if (existing_item is None
+                    or combo.currentText() != existing_item.submission_status
+                    or confirmed_at != existing_item.confirmed_at):
+                tracked_change = True
             items_data[ins_type] = {
                 "submission_status": combo.currentText(),
                 "confirmed_at": confirmed_at,
             }
 
-        last_contacted = None
-        if self._f_has_contact.isChecked():
-            qd2 = self._f_last_contacted.date()
-            last_contacted = date(qd2.year(), qd2.month(), qd2.day())
+        note = self._f_note.toPlainText()
+        last_contacted = self._renewal.last_contacted_at
+        manual = self._f_manual.isChecked()
+        if (note != (self._renewal.note or "")
+                or tracked_change
+                or manual != self._renewal.overall_status_manual
+                or (manual and self._f_overall_status.currentText() != self._renewal.overall_status)):
+            last_contacted = date.today()
 
         renewal_data = {
-            "overall_status_manual": self._f_manual.isChecked(),
-            "overall_status": self._f_overall_status.currentText() if self._f_manual.isChecked() else None,
+            "overall_status_manual": manual,
+            "overall_status": self._f_overall_status.currentText() if manual else None,
             "last_contacted_at": last_contacted,
-            "note": self._f_note.toPlainText(),
+            "note": note,
         }
         try:
             self._svc.update(self._renewal_id, items_data, renewal_data)

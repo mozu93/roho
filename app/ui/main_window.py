@@ -119,12 +119,12 @@ class MainWindow(QMainWindow):
         self._member_tab = MemberTab(self._engine, self._config, self._config_path)
         self._member_tab.jump_to_withdrawn.connect(self._on_jump_to_withdrawn)
         self._tabs.addTab(self._member_tab, "名簿")
-        self._withdrawn_tab = WithdrawnTab(self._engine, self._config, self._config_path)
-        self._tabs.addTab(self._withdrawn_tab, "委託解除済")
         self._renewal_tab = RenewalTab(self._engine, self._config, self._config_path)
         self._tabs.addTab(self._renewal_tab, "年度更新")
         self._fee_tab = FeeTab(self._engine, self._config, self._config_path)
         self._tabs.addTab(self._fee_tab, "手数料計算")
+        self._withdrawn_tab = WithdrawnTab(self._engine, self._config, self._config_path)
+        self._tabs.addTab(self._withdrawn_tab, "委託解除済")
         self._settings_tab = SettingsTab(self._engine, self._config, self._config_path)
         self._tabs.addTab(self._settings_tab, "設定")
         self._tabs.currentChanged.connect(self._on_tab_changed)
@@ -174,7 +174,7 @@ class MainWindow(QMainWindow):
             MemberHistoryDialog(self._engine, member_id, parent=self).exec()
 
     def _on_jump_to_withdrawn(self, member_id: int):
-        self._tabs.setCurrentIndex(1)
+        self._tabs.setCurrentIndex(3)
         self._withdrawn_tab.jump_to_member(member_id)
 
     def _show_notifications(self):
