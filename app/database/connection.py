@@ -109,6 +109,21 @@ def _migrate_staff_signature(engine) -> None:
             conn.commit()
 
 
+def _migrate_member_email_addresses(engine) -> None:
+    """既存の members.email をラベル付き複数メールテーブルの1件目へ移行する。"""
+    with engine.connect() as conn:
+        conn.execute(text("""
+            INSERT INTO member_email_addresses (member_id, address, label, sort_order)
+            SELECT m.id, m.email, '', 1
+            FROM members m
+            WHERE m.email IS NOT NULL AND TRIM(m.email) != ''
+              AND NOT EXISTS (
+                  SELECT 1 FROM member_email_addresses e WHERE e.member_id = m.id
+              )
+        """))
+        conn.commit()
+
+
 def _ensure_indexes(engine) -> None:
     """集計クエリを高速化するインデックスを初回起動時に作成する"""
     with engine.connect() as conn:
@@ -139,6 +154,7 @@ def get_engine(db_path: str):
     _migrate_registered_date(engine)
     _migrate_mail_addressee_fields(engine)
     _migrate_staff_signature(engine)
+    _migrate_member_email_addresses(engine)
     _ensure_indexes(engine)
     return engine
 

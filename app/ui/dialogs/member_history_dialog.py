@@ -18,7 +18,7 @@ _FIELD_LABELS = [
     ("dept_title",        "所属・役職"),
     ("rep_name",          "代表者名"),
     ("rep_kana",          "代表者フリガナ"),
-    ("email",             "メール"),
+    ("email_addresses",   "メールアドレス"),
     ("postal_code",       "郵便番号"),
     ("address",           "住所"),
     ("postal_code_mail",  "郵送先郵便番号"),
@@ -208,6 +208,14 @@ class MemberHistoryDialog(QDialog):
             return "会員" if val else "非会員"
         if key == "is_active":
             return "在籍" if val else "解除"
+        if key == "email_addresses":
+            if not val:
+                return "（なし）"
+            return "\n".join(
+                f"{e.get('address', '')}"
+                + (f" [{e.get('label')}]" if e.get("label") else "")
+                for e in val
+            )
         return str(val)
 
     def _fmt_tel(self, snap: dict, area_key: str, num_key: str) -> str:

@@ -55,6 +55,10 @@ class Member(Base):
     insurance_entries = relationship(
         "InsuranceEntry", back_populates="member", cascade="all, delete-orphan"
     )
+    email_addresses = relationship(
+        "MemberEmailAddress", back_populates="member",
+        order_by="MemberEmailAddress.sort_order", cascade="all, delete-orphan"
+    )
     member_changes = relationship("MemberChange", back_populates="member")
     activity_logs = relationship("ActivityLog", back_populates="member")
 
@@ -70,6 +74,17 @@ class InsuranceEntry(Base):
     is_ikkatsu = Column(Boolean, nullable=False, default=False)
 
     member = relationship("Member", back_populates="insurance_entries")
+
+
+class MemberEmailAddress(Base):
+    __tablename__ = "member_email_addresses"
+    id = Column(Integer, primary_key=True)
+    member_id = Column(Integer, ForeignKey("members.id"), nullable=False)
+    address = Column(String, nullable=False)
+    label = Column(String, default="")
+    sort_order = Column(Integer, nullable=False, default=1)
+
+    member = relationship("Member", back_populates="email_addresses")
 
 
 class MemberChange(Base):

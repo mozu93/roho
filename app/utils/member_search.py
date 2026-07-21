@@ -27,6 +27,8 @@ def member_matches_keyword(member, keyword: str) -> bool:
         "employment_ins_no", "label_tag", "note", "registered_date",
     )
     values = [getattr(member, name, "") for name in field_names]
+    for email in getattr(member, "email_addresses", ()):
+        values.extend((email.address, email.label))
     for entry in getattr(member, "insurance_entries", ()):
         values.extend((entry.ins_type, entry.branch_number, entry.ins_number))
 

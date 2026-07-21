@@ -1,5 +1,6 @@
 import os
 import webbrowser
+import copy
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
     QTextEdit, QPushButton, QComboBox,
@@ -67,10 +68,25 @@ class ComposeEmailDialog(QDialog):
         super().__init__(parent)
         self._engine = engine
         self._config = config
-        self._members = members
+        self._members = []
+        for member in members:
+            try:
+                addresses = list(member.email_addresses)
+            except Exception:
+                addresses = []
+            if addresses:
+                for email in addresses:
+                    target = copy.copy(member)
+                    target.email = email.address
+                    target.email_label = email.label or ""
+                    self._members.append(target)
+            else:
+                target = copy.copy(member)
+                target.email_label = ""
+                self._members.append(target)
         self._attachments: list[dict] = []
         self._svc = TemplateService(engine)
-        self.setWindowTitle(f"メール作成　（{len(members)}件）")
+        self.setWindowTitle(f"メール作成　（{len(self._members)}件）")
         self.resize(860, 560)
         self._build_ui()
         self._refresh_templates()
@@ -117,7 +133,8 @@ class ComposeEmailDialog(QDialog):
             hb.addWidget(chk)
             self._recv_table.setCellWidget(r, 0, container)
             self._recv_table.setItem(r, 1, QTableWidgetItem(m.org_name))
-            addr_item = QTableWidgetItem(m.email or "メールなし")
+            label = f" [{m.email_label}]" if getattr(m, "email_label", "") else ""
+            addr_item = QTableWidgetItem((m.email + label) if m.email else "メールなし")
             if not m.email:
                 addr_item.setForeground(QColor(150, 150, 150))
             self._recv_table.setItem(r, 2, addr_item)

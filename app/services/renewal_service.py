@@ -36,6 +36,28 @@ class RenewalService:
             )
             return [r[0] for r in rows]
 
+    def get_progress(self, fiscal_year: int) -> tuple[int, int, float]:
+        """年度全体の対象件数、提出件数、進捗率を返す。
+
+        「完了」は提出後の状態として提出件数に含める。
+        """
+        with get_session(self._engine) as session:
+            total = (
+                session.query(AnnualRenewal)
+                .filter(AnnualRenewal.fiscal_year == fiscal_year)
+                .count()
+            )
+            submitted = (
+                session.query(AnnualRenewal)
+                .filter(
+                    AnnualRenewal.fiscal_year == fiscal_year,
+                    AnnualRenewal.overall_status.in_(("提出済", "完了")),
+                )
+                .count()
+            )
+            percentage = submitted / total * 100 if total else 0.0
+            return total, submitted, percentage
+
     def generate_records(self, fiscal_year: int) -> int:
         """名簿の委託中事業所から、当該年度にまだレコードがない分だけ追加する。
         保有する枝番ごとに未提出のitemを作成する。"""
@@ -86,6 +108,7 @@ class RenewalService:
                 session.flush()
                 session.refresh(renewal, attribute_names=["items"])
             _ = renewal.member
+            _ = renewal.member.email_addresses
             _ = renewal.items
             session.expunge_all()
             return renewal
@@ -138,6 +161,7 @@ class RenewalService:
             for r in records:
                 _ = r.member
                 _ = r.member.insurance_entries
+                _ = r.member.email_addresses
                 _ = r.items
             if keyword:
                 records = [r for r in records if member_matches_keyword(r.member, keyword)]

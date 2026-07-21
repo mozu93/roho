@@ -70,6 +70,12 @@ DEFAULT_COL_MAP = {
     "ins_kensetsu_jimusho_ikkatsu":  42,
     "note":              43,
     "registered_date":   44,  # AS
+    "email_1_address":   45,
+    "email_1_label":     46,
+    "email_2_address":   47,
+    "email_2_label":     48,
+    "email_3_address":   49,
+    "email_3_label":     50,
 }
 
 # 旧テンプレート（「郵送先宛名」1列）の取込互換用。旧宛名は郵送先事業所名へ移す。
@@ -105,6 +111,9 @@ EXPORT_HEADERS = [
     "建設事務所枝番", "建設事務所番号", "建設事務所特別", "建設事務所一括",
     "メモ",
     "登録日",
+    "メール1アドレス", "メール1ラベル",
+    "メール2アドレス", "メール2ラベル",
+    "メール3アドレス", "メール3ラベル",
 ]
 
 
@@ -174,6 +183,19 @@ class ImportService:
             addr_mail2 = str(_get("address_mail2") or "").strip()
             addr_mail = "\n".join(x for x in [addr_mail1, addr_mail2] if x)
 
+            email_addresses = []
+            for i in range(1, 4):
+                email_address = str(_get(f"email_{i}_address") or "").strip()
+                if email_address:
+                    email_addresses.append({
+                        "address": email_address,
+                        "label": str(_get(f"email_{i}_label") or "").strip(),
+                    })
+            if not email_addresses:
+                legacy_email = str(_get("email") or "").strip()
+                if legacy_email:
+                    email_addresses.append({"address": legacy_email, "label": ""})
+
             data = {
                 "member_number":     member_number,
                 "is_member":         is_member,
@@ -182,7 +204,7 @@ class ImportService:
                 "dept_title":        str(_get("dept_title") or ""),
                 "rep_name":          str(_get("rep_name") or ""),
                 "rep_kana":          to_halfwidth_kana(str(_get("rep_kana") or "")),
-                "email":             str(_get("email") or ""),
+                "email_addresses":   email_addresses,
                 "tel_area":          str(_get("tel_area") or ""),
                 "tel":               str(_get("tel") or ""),
                 "fax_area":          str(_get("fax_area") or ""),
@@ -274,7 +296,10 @@ class ExportService:
             ] + ins_cols + [
                 m.note or "",
                 m.registered_date.strftime("%Y-%m-%d") if m.registered_date else "",
-            ])
+            ] + [value for i in range(3) for value in (
+                m.email_addresses[i].address if i < len(m.email_addresses) else "",
+                m.email_addresses[i].label if i < len(m.email_addresses) else "",
+            )])
         wb.save(output_path)
 
     @staticmethod

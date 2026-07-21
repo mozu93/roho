@@ -111,6 +111,13 @@ class RenewalTab(QWidget):
         gen_btn.setFont(control_font)
         gen_btn.clicked.connect(self._on_generate)
         top_row.addWidget(gen_btn)
+        self._progress_label = QLabel("全体状況：対象 0件中、提出 0件（進捗率 0%）")
+        self._progress_label.setFont(control_font)
+        self._progress_label.setStyleSheet(
+            "QLabel { padding: 5px 12px; background: #e8f1ff; "
+            "border: 1px solid #9bbce8; border-radius: 4px; font-weight: bold; }"
+        )
+        top_row.addWidget(self._progress_label)
         self._submission_edit_btn = QPushButton("提出状況を編集")
         self._submission_edit_btn.setFont(control_font)
         self._submission_edit_btn.setCheckable(True)
@@ -324,7 +331,12 @@ class RenewalTab(QWidget):
         fiscal_year = self._current_fiscal_year()
         self._table.setRowCount(0)
         if fiscal_year is None:
+            self._progress_label.setText("全体状況：対象 0件中、提出 0件（進捗率 0%）")
             return
+        total, submitted, percentage = self._svc.get_progress(fiscal_year)
+        self._progress_label.setText(
+            f"全体状況：対象 {total}件中、提出 {submitted}件（進捗率 {percentage:.0f}%）"
+        )
         keyword = self._search_edit.text().strip()
         status_filter = self._filter_combo.currentText()
         if status_filter == "すべて":

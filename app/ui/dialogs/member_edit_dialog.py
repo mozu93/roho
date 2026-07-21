@@ -78,7 +78,13 @@ class MemberEditDialog(QDialog):
         self._f_rep_name = QLineEdit()
         self._f_rep_kana = QLineEdit()
         self._f_rep_kana.setPlaceholderText("半角カタカナ（自動変換）")
-        self._f_email = QLineEdit()
+        self._email_rows: list[tuple[QLineEdit, QLineEdit]] = []
+        for i in range(1, 4):
+            address = QLineEdit()
+            address.setPlaceholderText(f"メールアドレス{i}")
+            label = QLineEdit()
+            label.setPlaceholderText("ラベル（代表・総務等）")
+            self._email_rows.append((address, label))
 
         # 電話（3分割: 市外局番 - 局番 - 番号）
         self._f_tel_area = QLineEdit()
@@ -173,7 +179,11 @@ class MemberEditDialog(QDialog):
         fl.addRow("所属・役職", self._f_dept_title)
         fl.addRow("代表者名", self._f_rep_name)
         fl.addRow("代表者フリガナ", self._f_rep_kana)
-        fl.addRow("メール", self._f_email)
+        for i, (address, label) in enumerate(self._email_rows, 1):
+            email_row = QHBoxLayout()
+            email_row.addWidget(address, 3)
+            email_row.addWidget(label, 1)
+            fl.addRow(f"メール{i}", email_row)
         fl.addRow("電話", tel_row)
         fl.addRow("FAX", fax_row)
         addr_layout = QVBoxLayout()
@@ -330,7 +340,14 @@ class MemberEditDialog(QDialog):
         self._f_dept_title.setText(m.dept_title or "")
         self._f_rep_name.setText(m.rep_name or "")
         self._f_rep_kana.setText(m.rep_kana or "")
-        self._f_email.setText(m.email or "")
+        emails = list(getattr(m, "email_addresses", []))
+        if not emails and m.email:
+            # 移行前データやテスト用オブジェクトとの後方互換
+            self._email_rows[0][0].setText(m.email)
+        else:
+            for i, email in enumerate(emails[:3]):
+                self._email_rows[i][0].setText(email.address or "")
+                self._email_rows[i][1].setText(email.label or "")
 
         self._f_tel_area.setText(m.tel_area or "")
         _tel_parts = (m.tel or "").split("-", 1)
@@ -385,6 +402,15 @@ class MemberEditDialog(QDialog):
         pcm1  = self._f_postal_code_mail_1.text().strip()
         pcm2  = self._f_postal_code_mail_2.text().strip()
 
+        email_addresses = []
+        for address_widget, label_widget in self._email_rows:
+            address = address_widget.text().strip()
+            if address:
+                email_addresses.append({
+                    "address": address,
+                    "label": label_widget.text().strip(),
+                })
+
         return {
             "is_member":         self._f_is_member.currentData(),
             "registered_date":   self._f_registered_date.date().toPyDate(),
@@ -394,7 +420,7 @@ class MemberEditDialog(QDialog):
             "dept_title":        self._f_dept_title.text().strip(),
             "rep_name":          self._f_rep_name.text().strip(),
             "rep_kana":          self._f_rep_kana.text().strip(),
-            "email":             self._f_email.text().strip(),
+            "email_addresses":   email_addresses,
             "tel_area":          self._f_tel_area.text().strip(),
             "tel":               "-".join(x for x in [
                                      self._f_tel_prefix.text().strip(),

@@ -34,6 +34,44 @@ def test_create_member(svc):
     assert len(m.insurance_entries) == 1
 
 
+def test_create_and_update_three_labeled_email_addresses(svc):
+    m = svc.create({
+        "member_number": "9010", "org_name": "メールテスト社",
+        "insurance_entries": [],
+        "email_addresses": [
+            {"address": "main@example.jp", "label": "代表"},
+            {"address": "soumu@example.jp", "label": "総務"},
+            {"address": "staff@example.jp", "label": "担当者"},
+        ],
+    }, "山田")
+    assert [(e.address, e.label) for e in m.email_addresses] == [
+        ("main@example.jp", "代表"),
+        ("soumu@example.jp", "総務"),
+        ("staff@example.jp", "担当者"),
+    ]
+    assert m.email == "main@example.jp"
+    assert len(svc.search(keyword="総務")) == 1
+
+    updated = svc.update(m.id, {
+        "email_addresses": [{"address": "new@example.jp", "label": "新担当"}],
+    }, "メール変更", "山田")
+    assert [(e.address, e.label) for e in updated.email_addresses] == [
+        ("new@example.jp", "新担当")
+    ]
+    assert updated.email == "new@example.jp"
+
+
+def test_email_addresses_are_limited_to_three(svc):
+    with pytest.raises(ValueError, match="最大3件"):
+        svc.create({
+            "member_number": "9011", "org_name": "上限テスト社",
+            "insurance_entries": [],
+            "email_addresses": [
+                {"address": f"mail{i}@example.jp", "label": ""} for i in range(4)
+            ],
+        }, "山田")
+
+
 def test_search_by_keyword(svc):
     svc.create({"member_number": "9001", "org_name": "㈱テスト商事", "insurance_entries": []}, "山田")
     svc.create({"member_number": "9002", "org_name": "△△建設", "insurance_entries": []}, "山田")

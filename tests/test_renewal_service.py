@@ -46,6 +46,36 @@ def test_compute_overall_status_all_not_applicable_is_not_submitted():
     assert compute_overall_status(["対象外", "対象外"]) == "未提出"
 
 
+def test_get_progress_counts_submitted_and_completed(svc):
+    with get_session(svc._engine) as session:
+        session.add_all([
+            Member(member_number="9101", org_name="提出済社", is_active=True, is_member=True),
+            Member(member_number="9102", org_name="完了社", is_active=True, is_member=True),
+            Member(member_number="9103", org_name="未提出社", is_active=True, is_member=True),
+        ])
+    svc.generate_records(2026)
+    records = svc.search(2026)
+    assert len(records) == 3
+
+    svc.update(records[0].id, {}, {
+        "overall_status_manual": True, "overall_status": "提出済",
+        "last_contact_date": None, "memo": "",
+    })
+    svc.update(records[1].id, {}, {
+        "overall_status_manual": True, "overall_status": "完了",
+        "last_contact_date": None, "memo": "",
+    })
+
+    total, submitted, percentage = svc.get_progress(2026)
+    assert total == 3
+    assert submitted == 2
+    assert percentage == pytest.approx(66.6667, rel=1e-4)
+
+
+def test_get_progress_empty_year(svc):
+    assert svc.get_progress(2099) == (0, 0, 0.0)
+
+
 def test_generate_records_creates_for_active_members_with_branches(svc):
     with get_session(svc._engine) as session:
         m1 = Member(member_number="9001", org_name="A社", is_active=True, is_member=True)

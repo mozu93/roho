@@ -3,7 +3,8 @@ from datetime import datetime
 from sqlalchemy import func
 from app.database.connection import get_session
 from app.database.models import (
-    Member, InsuranceEntry, MemberChange, ChangeConfirmation, Staff, AnnualFeeRecord,
+    Member, InsuranceEntry, MemberEmailAddress, MemberChange, ChangeConfirmation, Staff,
+    AnnualFeeRecord,
 )
 from app.utils.member_search import member_matches_keyword
 
@@ -44,6 +45,7 @@ class MemberService:
             results = q.distinct().order_by(Member.member_number).all()
             for m in results:
                 _ = m.insurance_entries  # eager load
+                _ = m.email_addresses
             if keyword:
                 results = [m for m in results if member_matches_keyword(m, keyword)]
             session.expunge_all()
@@ -54,6 +56,7 @@ class MemberService:
             m = session.get(Member, member_id)
             if m:
                 _ = m.insurance_entries
+                _ = m.email_addresses
             session.expunge_all()
             return m
 
@@ -61,6 +64,14 @@ class MemberService:
         data = dict(data)  # コピーして元データを保護
         with get_session(self._engine) as session:
             entries_data = data.pop("insurance_entries", [])
+            emails_data = data.pop("email_addresses", None)
+            if emails_data is None:
+                legacy_email = data.get("email", "") or ""
+                emails_data = ([{"address": legacy_email, "label": ""}]
+                               if legacy_email else [])
+            if len(emails_data) > 3:
+                raise ValueError("メールアドレスは最大3件まで登録できます。")
+            data["email"] = emails_data[0]["address"] if emails_data else ""
             # 事業所コードを自動採番
             max_code = session.query(func.max(Member.company_code)).scalar() or 0
             data["company_code"] = max_code + 1
@@ -71,8 +82,14 @@ class MemberService:
             session.flush()
             for e in entries_data:
                 session.add(InsuranceEntry(member_id=m.id, **e))
+            for i, e in enumerate(emails_data, 1):
+                session.add(MemberEmailAddress(
+                    member_id=m.id, address=e["address"], label=e.get("label", ""),
+                    sort_order=i,
+                ))
             session.flush()
             _ = m.insurance_entries
+            _ = m.email_addresses
             session.expunge_all()
             return m
 
@@ -86,6 +103,11 @@ class MemberService:
             snapshot = json.dumps(self.member_to_dict(m), ensure_ascii=False)
 
             entries_data = data.pop("insurance_entries", None)
+            emails_data = data.pop("email_addresses", None)
+            if emails_data is not None:
+                if len(emails_data) > 3:
+                    raise ValueError("メールアドレスは最大3件まで登録できます。")
+                data["email"] = emails_data[0]["address"] if emails_data else ""
             for k, v in data.items():
                 setattr(m, k, v)
             m.updated_at = datetime.now()
@@ -97,6 +119,15 @@ class MemberService:
                 session.flush()
                 for e in entries_data:
                     session.add(InsuranceEntry(member_id=m.id, **e))
+
+            if emails_data is not None:
+                m.email_addresses.clear()
+                session.flush()
+                for i, e in enumerate(emails_data, 1):
+                    m.email_addresses.append(MemberEmailAddress(
+                        address=e["address"], label=e.get("label", ""),
+                        sort_order=i,
+                    ))
 
             # 変更履歴を記録
             change = MemberChange(
@@ -124,6 +155,7 @@ class MemberService:
             session.flush()
 
             _ = m.insurance_entries
+            _ = m.email_addresses
             session.expunge_all()
             return m
 
@@ -190,6 +222,7 @@ class MemberService:
             if not m:
                 return {}
             _ = m.insurance_entries
+            _ = m.email_addresses
             return self.member_to_dict(m)
 
     def get_changes(self, member_id: int) -> list:
@@ -214,6 +247,10 @@ class MemberService:
             "rep_name":          member.rep_name,
             "rep_kana":          member.rep_kana,
             "email":             member.email,
+            "email_addresses":   [
+                {"address": e.address, "label": e.label or "", "sort_order": e.sort_order}
+                for e in member.email_addresses
+            ],
             "tel_area":          member.tel_area,
             "tel":               member.tel,
             "fax_area":          member.fax_area,
