@@ -5,10 +5,13 @@ from PyQt6.QtWidgets import (
     QApplication, QDialog, QVBoxLayout, QHBoxLayout, QFormLayout,
     QLineEdit, QTextEdit, QCheckBox, QGroupBox, QComboBox,
     QPushButton, QScrollArea, QWidget, QLabel, QMessageBox, QDateEdit,
+    QTableWidget, QTableWidgetItem, QAbstractItemView, QHeaderView,
 )
 from PyQt6.QtCore import Qt, QDate
 from app.services.member_service import MemberService, INS_TYPES
 from app.utils.kana import to_halfwidth_kana
+from app.services.bank_account_service import BankAccountService, ACCOUNT_TYPE_NAMES
+from app.ui.dialogs.bank_account_dialog import BankAccountDialog
 
 INS_LABELS = {
     "ippan":            "一般・労＆雇（枝番0）",
@@ -33,6 +36,7 @@ class MemberEditDialog(QDialog):
         self._member_id = member_id
         self._show_withdraw_info = show_withdraw_info
         self._svc = MemberService(engine)
+        self._bank_svc = BankAccountService(engine)
         self.saved = False
         self.setWindowTitle("編集" if member_id else "新規登録")
         self.setMinimumWidth(620)
@@ -284,6 +288,38 @@ class MemberEditDialog(QDialog):
             ikkatsu_chk.setEnabled(False)
         form_layout.addWidget(ins_group)
 
+        # 振込先口座（顧客本体の保存後に管理）
+        bank_group = QGroupBox("振込先口座")
+        bank_layout = QVBoxLayout(bank_group)
+        bank_buttons = QHBoxLayout()
+        self._bank_add_btn = QPushButton("追加")
+        self._bank_edit_btn = QPushButton("編集")
+        self._bank_delete_btn = QPushButton("削除")
+        bank_buttons.addWidget(self._bank_add_btn)
+        bank_buttons.addWidget(self._bank_edit_btn)
+        bank_buttons.addWidget(self._bank_delete_btn)
+        bank_buttons.addStretch()
+        bank_layout.addLayout(bank_buttons)
+        self._bank_table = QTableWidget(0, 6)
+        self._bank_table.setHorizontalHeaderLabels(
+            ["有効", "金融機関", "支店", "種目", "口座番号", "受取人名カナ"]
+        )
+        self._bank_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        self._bank_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        self._bank_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        self._bank_table.setMinimumHeight(150)
+        bank_layout.addWidget(self._bank_table)
+        if not self._member_id:
+            note = QLabel("顧客を保存後、編集画面から振込先口座を登録できます。")
+            note.setStyleSheet("color: #666;")
+            bank_layout.addWidget(note)
+            self._bank_add_btn.setEnabled(False)
+        self._bank_add_btn.clicked.connect(self._add_bank_account)
+        self._bank_edit_btn.clicked.connect(self._edit_bank_account)
+        self._bank_delete_btn.clicked.connect(self._delete_bank_account)
+        self._bank_table.doubleClicked.connect(self._edit_bank_account)
+        form_layout.addWidget(bank_group)
+
         # 変更理由
         self._reason_group = QGroupBox("変更理由（省略可）")
         rl = QVBoxLayout(self._reason_group)
@@ -384,6 +420,70 @@ class MemberEditDialog(QDialog):
                 num_edit.setText(e.ins_number or "")
                 tok_chk.setChecked(e.is_tokubetsu)
                 ika_chk.setChecked(e.is_ikkatsu)
+        self._load_bank_accounts()
+
+    def _selected_bank_account_id(self):
+        row = self._bank_table.currentRow()
+        if row < 0:
+            return None
+        item = self._bank_table.item(row, 0)
+        return item.data(Qt.ItemDataRole.UserRole) if item else None
+
+    def _load_bank_accounts(self):
+        if not self._member_id:
+            return
+        rows = self._bank_svc.list_for_member(self._member_id)
+        self._bank_table.setRowCount(len(rows))
+        for index, account in enumerate(rows):
+            values = [
+                "○" if account.is_enabled else "―",
+                f"{account.bank_name} ({account.bank_code})",
+                f"{account.branch_name} ({account.branch_code})",
+                ACCOUNT_TYPE_NAMES.get(account.account_type, account.account_type),
+                account.account_number,
+                account.recipient_name_kana,
+            ]
+            for column, value in enumerate(values):
+                item = QTableWidgetItem(value)
+                if column == 0:
+                    item.setData(Qt.ItemDataRole.UserRole, account.id)
+                if not account.is_enabled:
+                    item.setForeground(Qt.GlobalColor.gray)
+                self._bank_table.setItem(index, column, item)
+
+    def _add_bank_account(self):
+        dialog = BankAccountDialog(self._engine, self._member_id, parent=self)
+        if dialog.exec() == QDialog.DialogCode.Accepted and dialog.saved:
+            self._load_bank_accounts()
+
+    def _edit_bank_account(self, *_):
+        account_id = self._selected_bank_account_id()
+        if account_id is None:
+            QMessageBox.information(self, "振込先口座", "編集する口座を選択してください。")
+            return
+        dialog = BankAccountDialog(
+            self._engine, self._member_id, account_id=account_id, parent=self
+        )
+        if dialog.exec() == QDialog.DialogCode.Accepted and dialog.saved:
+            self._load_bank_accounts()
+
+    def _delete_bank_account(self):
+        account_id = self._selected_bank_account_id()
+        if account_id is None:
+            QMessageBox.information(self, "振込先口座", "削除する口座を選択してください。")
+            return
+        account = self._bank_svc.get(account_id)
+        if not account:
+            self._load_bank_accounts()
+            return
+        answer = QMessageBox.question(
+            self, "削除確認",
+            f"{account.bank_name} {account.branch_name} 口座番号末尾{account.account_number[-4:]}を"
+            "削除しますか？",
+        )
+        if answer == QMessageBox.StandardButton.Yes:
+            self._bank_svc.delete(account_id)
+            self._load_bank_accounts()
 
     def _collect_data(self) -> dict:
         entries = []

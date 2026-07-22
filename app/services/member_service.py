@@ -46,6 +46,7 @@ class MemberService:
             for m in results:
                 _ = m.insurance_entries  # eager load
                 _ = m.email_addresses
+                _ = m.bank_accounts
             if keyword:
                 results = [m for m in results if member_matches_keyword(m, keyword)]
             session.expunge_all()
@@ -57,6 +58,7 @@ class MemberService:
             if m:
                 _ = m.insurance_entries
                 _ = m.email_addresses
+                _ = m.bank_accounts
             session.expunge_all()
             return m
 

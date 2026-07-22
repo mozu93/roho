@@ -6,7 +6,7 @@ from app.database.models import (
     Base, Member, InsuranceEntry, MemberChange,
     ActivityLog, ActivityCategory, ActivityLogCategory,
     ActivityConfirmation, ChangeConfirmation,
-    Staff, EmailTemplate, SendJob, SendLog,
+    Staff, EmailTemplate, SendJob, SendLog, BankAccount,
 )
 
 @pytest.fixture
@@ -30,6 +30,19 @@ def test_insurance_entry_relationship(db):
     db.add(e)
     db.commit()
     assert len(db.get(Member, m.id).insurance_entries) == 1
+
+
+def test_bank_account_relationship(db):
+    m = Member(member_number="9002", org_name="口座テスト商事")
+    db.add(m)
+    db.flush()
+    db.add(BankAccount(
+        member_id=m.id, bank_code="0001", bank_name="みずほ銀行",
+        branch_code="001", branch_name="本店", account_type="1",
+        account_number="0123456", recipient_name_kana="ｶ)ﾃｽﾄ",
+    ))
+    db.commit()
+    assert db.get(Member, m.id).bank_accounts[0].account_number == "0123456"
 
 def test_activity_log_category_many_to_many(db):
     m = Member(member_number="9001", org_name="㈱テスト商事")

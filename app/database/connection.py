@@ -148,6 +148,7 @@ def get_engine(db_path: str):
     def _set_wal(dbapi_conn, _):
         dbapi_conn.execute("PRAGMA journal_mode=WAL")
         dbapi_conn.execute("PRAGMA busy_timeout=5000")
+        dbapi_conn.execute("PRAGMA foreign_keys=ON")
 
     Base.metadata.create_all(engine)
     _migrate(engine)

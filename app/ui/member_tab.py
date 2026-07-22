@@ -182,7 +182,8 @@ COLS = [
     "代表者名", "代表者フリガナ", "メール", "市外局番", "電話番号", "FAX市外局番", "FAX",
     "郵便番号", "住所",
     "郵送先郵便番号", "郵送先住所", "郵送先事業所名", "郵送先所属・役職名", "郵送先氏名", "雇用保険事業所番号",
-    "0", "2", "4", "5", "6", "特別", "継続一括", "登録日", "最終更新日", "最終対応日", "メモ"
+    "0", "2", "4", "5", "6", "特別", "継続一括", "登録日", "最終更新日", "最終対応日", "メモ",
+    "振込先金融機関", "振込先支店", "預金種目", "口座番号", "受取人名カナ",
 ]
 # 列インデックス定数
 _COL_SELECT = 0
@@ -487,6 +488,13 @@ class MemberTab(QWidget):
         email_btn.clicked.connect(self._on_compose_email)
         btn_row.addWidget(email_btn)
 
+        bank_import_btn = QPushButton("口座Excel入力")
+        bank_import_btn.clicked.connect(self._on_bank_account_import)
+        btn_row.addWidget(bank_import_btn)
+        bank_export_btn = QPushButton("口座Excel出力")
+        bank_export_btn.clicked.connect(self._on_bank_account_export)
+        btn_row.addWidget(bank_export_btn)
+
         btn_row.addStretch()
 
         # ── 対応履歴グループ（右端）──
@@ -640,6 +648,20 @@ class MemberTab(QWidget):
             last_item.setTextAlignment(_ac)
             self._table.setItem(row, 31, last_item)
             self._table.setItem(row, 32, SortableTableWidgetItem(m.note or ""))
+            active_accounts = [a for a in m.bank_accounts if a.is_enabled]
+            separator = " ／ "
+            bank_values = [
+                separator.join(f"{a.bank_name} ({a.bank_code})" for a in active_accounts),
+                separator.join(f"{a.branch_name} ({a.branch_code})" for a in active_accounts),
+                separator.join({"1": "普通", "2": "当座", "4": "貯蓄"}.get(
+                    a.account_type, a.account_type) for a in active_accounts),
+                separator.join(a.account_number for a in active_accounts),
+                separator.join(a.recipient_name_kana for a in active_accounts),
+            ]
+            for offset, value in enumerate(bank_values, start=33):
+                account_item = SortableTableWidgetItem(value)
+                account_item.setTextAlignment(_ac)
+                self._table.setItem(row, offset, account_item)
         if not self._get_staff_setting("aggregate_sort_active", False):
             saved_col = self._get_staff_setting("sort_column", -1)
             saved_ord = Qt.SortOrder(self._get_staff_setting(
@@ -1235,3 +1257,44 @@ class MemberTab(QWidget):
         except Exception as e:
             from PyQt6.QtWidgets import QMessageBox
             QMessageBox.critical(self, "エラー", str(e))
+
+    def _on_bank_account_export(self):
+        from PyQt6.QtWidgets import QFileDialog
+        from app.services.bank_account_excel_service import BankAccountExcelService
+        path, _ = QFileDialog.getSaveFileName(
+            self, "振込先口座Excel出力", "振込先口座.xlsx", "Excel (*.xlsx)"
+        )
+        if not path:
+            return
+        try:
+            count = BankAccountExcelService(self._engine).export_excel(
+                path, [member.id for member in self._members]
+            )
+            QMessageBox.information(self, "出力完了", f"振込先口座を{count}件出力しました。")
+        except Exception as exc:
+            QMessageBox.critical(self, "出力エラー", str(exc))
+
+    def _on_bank_account_import(self):
+        from PyQt6.QtWidgets import QFileDialog
+        from app.services.bank_account_excel_service import BankAccountExcelService
+        path, _ = QFileDialog.getOpenFileName(
+            self, "振込先口座Excel入力", "", "Excel (*.xlsx)"
+        )
+        if not path:
+            return
+        try:
+            result = BankAccountExcelService(self._engine).import_excel(path)
+            self._refresh()
+            summary = (
+                f"追加：{result['added']}件\n更新：{result['updated']}件\n"
+                f"スキップ：{result['skipped']}件"
+            )
+            if result["errors"]:
+                details = "\n".join(result["errors"][:10])
+                if len(result["errors"]) > 10:
+                    details += f"\nほか{len(result['errors']) - 10}件"
+                QMessageBox.warning(self, "入力結果", summary + "\n\n" + details)
+            else:
+                QMessageBox.information(self, "入力完了", summary)
+        except Exception as exc:
+            QMessageBox.critical(self, "入力エラー", str(exc))

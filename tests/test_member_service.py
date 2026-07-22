@@ -1,6 +1,6 @@
 import pytest
 from sqlalchemy import create_engine
-from app.database.models import Base, Staff, AnnualFeeRecord
+from app.database.models import Base, Staff, AnnualFeeRecord, BankAccount
 from app.database.connection import get_session
 from app.services.member_service import MemberService
 
@@ -78,6 +78,20 @@ def test_search_by_keyword(svc):
     results = svc.search(keyword="テスト")
     assert len(results) == 1
     assert results[0].org_name == "㈱テスト商事"
+
+
+def test_search_result_includes_detached_bank_accounts(svc, engine):
+    member = svc.create({
+        "member_number": "9012", "org_name": "口座一覧テスト", "insurance_entries": []
+    }, "山田")
+    with get_session(engine) as session:
+        session.add(BankAccount(
+            member_id=member.id, bank_code="0001", bank_name="みずほ銀行",
+            branch_code="001", branch_name="本店", account_type="1",
+            account_number="0123456", recipient_name_kana="ｶ)ﾃｽﾄ",
+        ))
+    result = svc.search(keyword="口座一覧テスト")[0]
+    assert result.bank_accounts[0].account_number == "0123456"
 
 
 def test_search_by_rep_name_and_kana(svc):

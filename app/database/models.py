@@ -1,7 +1,7 @@
 from datetime import datetime
 from sqlalchemy import (
     Column, Integer, String, Boolean, DateTime, Date, Float,
-    Text, ForeignKey, Table, UniqueConstraint,
+    Text, ForeignKey, Table, UniqueConstraint, CheckConstraint, Index,
 )
 from sqlalchemy.orm import relationship, declarative_base
 
@@ -59,6 +59,9 @@ class Member(Base):
         "MemberEmailAddress", back_populates="member",
         order_by="MemberEmailAddress.sort_order", cascade="all, delete-orphan"
     )
+    bank_accounts = relationship(
+        "BankAccount", back_populates="member", cascade="all, delete-orphan"
+    )
     member_changes = relationship("MemberChange", back_populates="member")
     activity_logs = relationship("ActivityLog", back_populates="member")
 
@@ -85,6 +88,49 @@ class MemberEmailAddress(Base):
     sort_order = Column(Integer, nullable=False, default=1)
 
     member = relationship("Member", back_populates="email_addresses")
+
+
+class BankAccount(Base):
+    __tablename__ = "bank_accounts"
+    __table_args__ = (
+        CheckConstraint(
+            "length(bank_code) = 4 AND bank_code NOT GLOB '*[^0-9]*'",
+            name="ck_bank_accounts_bank_code",
+        ),
+        CheckConstraint(
+            "length(branch_code) = 3 AND branch_code NOT GLOB '*[^0-9]*'",
+            name="ck_bank_accounts_branch_code",
+        ),
+        CheckConstraint("account_type IN ('1', '2', '4')", name="ck_bank_accounts_type"),
+        CheckConstraint(
+            "length(account_number) = 7 AND account_number NOT GLOB '*[^0-9]*'",
+            name="ck_bank_accounts_number",
+        ),
+        CheckConstraint("length(trim(bank_name)) > 0", name="ck_bank_accounts_bank_name"),
+        CheckConstraint("length(trim(branch_name)) > 0", name="ck_bank_accounts_branch_name"),
+        CheckConstraint(
+            "length(recipient_name_kana) BETWEEN 1 AND 48",
+            name="ck_bank_accounts_recipient",
+        ),
+        Index("ix_bank_accounts_member_enabled", "member_id", "is_enabled"),
+    )
+
+    id = Column(Integer, primary_key=True)
+    member_id = Column(
+        Integer, ForeignKey("members.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    bank_code = Column(String(4), nullable=False)
+    bank_name = Column(String(100), nullable=False)
+    branch_code = Column(String(3), nullable=False)
+    branch_name = Column(String(100), nullable=False)
+    account_type = Column(String(1), nullable=False)
+    account_number = Column(String(7), nullable=False)
+    recipient_name_kana = Column(String(48), nullable=False)
+    is_enabled = Column(Boolean, nullable=False, default=True)
+    created_at = Column(DateTime, nullable=False, default=datetime.now)
+    updated_at = Column(DateTime, nullable=False, default=datetime.now, onupdate=datetime.now)
+
+    member = relationship("Member", back_populates="bank_accounts")
 
 
 class MemberChange(Base):
