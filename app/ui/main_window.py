@@ -11,6 +11,7 @@ from app.ui.member_tab import MemberTab
 from app.ui.withdrawn_tab import WithdrawnTab
 from app.ui.renewal_tab import RenewalTab
 from app.ui.fee_tab import FeeTab
+from app.ui.refund_tab import RefundTab
 from app.ui.settings_tab import SettingsTab
 from app.ui.update_banner import UpdateBanner
 from app.version import __version__
@@ -123,6 +124,8 @@ class MainWindow(QMainWindow):
         self._tabs.addTab(self._renewal_tab, "年度更新")
         self._fee_tab = FeeTab(self._engine, self._config, self._config_path)
         self._tabs.addTab(self._fee_tab, "手数料計算")
+        self._refund_tab = RefundTab(self._engine, self._config, self._config_path)
+        self._tabs.addTab(self._refund_tab, "還付金振込")
         self._withdrawn_tab = WithdrawnTab(self._engine, self._config, self._config_path)
         self._tabs.addTab(self._withdrawn_tab, "委託解除済")
         self._settings_tab = SettingsTab(self._engine, self._config, self._config_path)
@@ -153,6 +156,8 @@ class MainWindow(QMainWindow):
             self._member_tab.refresh_categories()
         elif widget is self._fee_tab:
             self._fee_tab._refresh()
+        elif widget is self._refund_tab:
+            self._refund_tab._refresh()
         elif widget is self._renewal_tab:
             self._renewal_tab._refresh()
 
@@ -174,7 +179,7 @@ class MainWindow(QMainWindow):
             MemberHistoryDialog(self._engine, member_id, parent=self).exec()
 
     def _on_jump_to_withdrawn(self, member_id: int):
-        self._tabs.setCurrentIndex(3)
+        self._tabs.setCurrentIndex(4)
         self._withdrawn_tab.jump_to_member(member_id)
 
     def _show_notifications(self):

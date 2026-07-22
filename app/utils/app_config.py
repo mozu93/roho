@@ -11,6 +11,14 @@ class AppConfig:
     m365_tenant_id: str = ""
     m365_client_id: str = ""
     m365_test_address: str = ""
+    m365_from_address: str = ""
+    refund_origin_bank_code: str = ""
+    refund_origin_bank_name: str = ""
+    refund_origin_branch_code: str = ""
+    refund_origin_branch_name: str = ""
+    refund_origin_account_type: str = "1"
+    refund_origin_account_number: str = ""
+    refund_origin_account_name_kana: str = ""
     hidden_columns: list[str] = field(default_factory=list)
     withdrawn_hidden_columns: list[str] = field(default_factory=list)
     member_column_widths: dict = field(default_factory=dict)

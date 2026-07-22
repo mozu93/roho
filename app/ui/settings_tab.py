@@ -177,10 +177,20 @@ class SettingsTab(QWidget):
         self._tenant_edit = QLineEdit(self._config.m365_tenant_id)
         self._client_id_edit = QLineEdit(self._config.m365_client_id)
         self._test_addr_edit = QLineEdit(self._config.m365_test_address)
+        self._from_addr_edit = QLineEdit(self._config.m365_from_address)
+        self._from_addr_edit.setPlaceholderText("未設定の場合は、サインインしたアカウントから送信")
         form.addRow("テナントID：", self._tenant_edit)
         form.addRow("クライアントID：", self._client_id_edit)
         form.addRow("テスト送信先：", self._test_addr_edit)
+        form.addRow("代理差出人アドレス（任意）：", self._from_addr_edit)
         mg.addLayout(form)
+        proxy_note = QLabel(
+            "代理差出人を使う場合は、Entra ID アプリに委任権限「Mail.Send.Shared」を追加し、"
+            "各利用者へ対象メールボックスの「Send As」権限を付与してください。"
+        )
+        proxy_note.setWordWrap(True)
+        proxy_note.setStyleSheet("color:#6B7280; font-size:9pt;")
+        mg.addWidget(proxy_note)
 
         m365_btn_row = QHBoxLayout()
         save_m365_btn = QPushButton("設定を保存")
@@ -201,6 +211,28 @@ class SettingsTab(QWidget):
         self._update_auth_status()
 
         rv.addWidget(m365_group)
+
+        refund_group = QGroupBox("還付金振込元口座設定")
+        rg = QFormLayout(refund_group)
+        self._refund_bank_code_edit = QLineEdit(self._config.refund_origin_bank_code)
+        self._refund_bank_name_edit = QLineEdit(self._config.refund_origin_bank_name)
+        self._refund_branch_code_edit = QLineEdit(self._config.refund_origin_branch_code)
+        self._refund_branch_name_edit = QLineEdit(self._config.refund_origin_branch_name)
+        self._refund_account_type_edit = QLineEdit(self._config.refund_origin_account_type)
+        self._refund_account_number_edit = QLineEdit(self._config.refund_origin_account_number)
+        self._refund_account_name_edit = QLineEdit(self._config.refund_origin_account_name_kana)
+        self._refund_account_name_edit.setPlaceholderText("例：ﾛｳﾎｹﾝｼﾞﾑｸﾐｱｲ")
+        rg.addRow("金融機関コード：", self._refund_bank_code_edit)
+        rg.addRow("金融機関名：", self._refund_bank_name_edit)
+        rg.addRow("支店コード：", self._refund_branch_code_edit)
+        rg.addRow("支店名：", self._refund_branch_name_edit)
+        rg.addRow("預金種目（普通=1／当座=2）：", self._refund_account_type_edit)
+        rg.addRow("口座番号：", self._refund_account_number_edit)
+        rg.addRow("口座名義カナ：", self._refund_account_name_edit)
+        save_refund_btn = QPushButton("振込元口座を保存")
+        save_refund_btn.clicked.connect(self._on_save_refund_origin)
+        rg.addRow("", save_refund_btn)
+        rv.addWidget(refund_group)
         rv.addStretch()
 
         right_scroll = QScrollArea()
@@ -401,6 +433,7 @@ class SettingsTab(QWidget):
         self._config.m365_tenant_id = self._tenant_edit.text().strip()
         self._config.m365_client_id = self._client_id_edit.text().strip()
         self._config.m365_test_address = self._test_addr_edit.text().strip()
+        self._config.m365_from_address = self._from_addr_edit.text().strip()
         save_path = self._config_path or os.path.join(
             os.path.dirname(os.path.abspath(__file__)), "..", "..", "app_config.json"
         )
@@ -410,6 +443,23 @@ class SettingsTab(QWidget):
             QMessageBox.critical(self, "保存エラー",
                 "設定ファイルの書き込みに失敗しました。\n"
                 "ファイルのアクセス権限を確認してください。")
+
+    def _on_save_refund_origin(self):
+        fields = (
+            ("refund_origin_bank_code", self._refund_bank_code_edit),
+            ("refund_origin_bank_name", self._refund_bank_name_edit),
+            ("refund_origin_branch_code", self._refund_branch_code_edit),
+            ("refund_origin_branch_name", self._refund_branch_name_edit),
+            ("refund_origin_account_type", self._refund_account_type_edit),
+            ("refund_origin_account_number", self._refund_account_number_edit),
+            ("refund_origin_account_name_kana", self._refund_account_name_edit),
+        )
+        for name, widget in fields:
+            setattr(self._config, name, widget.text().strip())
+        if self._config.save(self._config_path):
+            QMessageBox.information(self, "保存", "還付金振込元口座を保存しました。")
+        else:
+            QMessageBox.critical(self, "保存エラー", "設定ファイルの書き込みに失敗しました。")
 
     def _update_auth_status(self):
         svc = EmailService(self._config)

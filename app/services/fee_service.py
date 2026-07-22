@@ -244,5 +244,7 @@ class FeeService:
             records = q.order_by(Member.member_number).all()
             for r in records:
                 _ = r.member
+                _ = r.member.insurance_entries
+                _ = r.member.bank_accounts
             session.expunge_all()
             return records

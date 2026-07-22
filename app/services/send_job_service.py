@@ -1,4 +1,5 @@
 from datetime import datetime
+import time
 from app.database.connection import get_session
 from app.database.models import SendJob, SendLog, Staff
 
@@ -45,17 +46,8 @@ class SendJobService:
 
         results = {"success": 0, "error": 0, "skip": 0}
 
-        # トークンを一度だけ取得
-        app_obj = email_svc._get_app()
-        accounts = app_obj.get_accounts()
-        if not accounts:
-            raise RuntimeError("未認証です。先にサインインしてください。")
-        token_result = app_obj.acquire_token_silent(
-            ["Mail.Send"], account=accounts[0]
-        )
-        if not token_result or "access_token" not in token_result:
-            raise RuntimeError("トークン取得失敗。再サインインしてください。")
-        token = token_result["access_token"]
+        # トークンを一度だけ取得（代理送信時は Mail.Send.Shared も含む）。
+        token = email_svc.get_token_silent()
 
         with get_session(self._engine) as session:
             job_obj = session.get(SendJob, job_id)
@@ -63,6 +55,7 @@ class SendJobService:
             session.expunge_all()
         template = template_svc.get(template_id)
 
+        consecutive_errors = 0
         for idx, member in enumerate(targets):
             if progress_callback:
                 progress_callback(idx + 1, len(targets))
@@ -82,10 +75,20 @@ class SendJobService:
                     token=token,
                 )
                 results["success"] += 1
+                consecutive_errors = 0
                 self._log(job_id, member.id, member.email, subject, "success", None)
             except Exception as e:
                 results["error"] += 1
+                consecutive_errors += 1
                 self._log(job_id, member.id, member.email, "", "error", str(e)[:500])
+            if consecutive_errors >= 5:
+                for skipped in targets[idx + 1:]:
+                    results["skip"] += 1
+                    self._log(job_id, skipped.id, skipped.email or "", "", "skip",
+                              "送信エラーが5件連続したため中断")
+                break
+            if idx < len(targets) - 1:
+                time.sleep(2)
 
         with get_session(self._engine) as session:
             job = session.get(SendJob, job_id)

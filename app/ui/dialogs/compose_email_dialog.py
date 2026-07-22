@@ -1,6 +1,7 @@
 import os
 import webbrowser
 import copy
+import time
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
     QTextEdit, QPushButton, QComboBox,
@@ -33,6 +34,7 @@ class _SendWorker(QThread):
     def run(self):
         errors = []
         total = len(self._messages)
+        consecutive_errors = 0
         for i, (m, subj, body) in enumerate(self._messages, 1):
             try:
                 self._email_svc.send(
@@ -40,9 +42,16 @@ class _SendWorker(QThread):
                     self._attachments or None,
                     self._token,
                 )
+                consecutive_errors = 0
             except Exception as e:
                 errors.append(f"{m.org_name}：{e}")
+                consecutive_errors += 1
             self.progress.emit(i, total)
+            if consecutive_errors >= 5:
+                errors.append("送信エラーが5件連続したため、残りの送信を中断しました。")
+                break
+            if i < total:
+                time.sleep(2)
         self.finished.emit(errors)
 
 

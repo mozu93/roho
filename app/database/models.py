@@ -296,6 +296,23 @@ class AnnualFeeRecord(Base):
     member = relationship("Member")
 
 
+class RefundTransferRecord(Base):
+    """年度更新に伴う還付金の振込管理。金額は届いた還付通知書を基に入力する。"""
+    __tablename__ = "refund_transfer_records"
+    __table_args__ = (UniqueConstraint("fiscal_year", "member_id"),)
+
+    id = Column(Integer, primary_key=True)
+    fiscal_year = Column(Integer, nullable=False)
+    member_id = Column(Integer, ForeignKey("members.id"), nullable=False)
+    refund_amount = Column(Integer, nullable=False, default=0)
+    note = Column(Text)
+    exported_at = Column(DateTime)
+    created_at = Column(DateTime, nullable=False, default=datetime.now)
+    updated_at = Column(DateTime, nullable=False, default=datetime.now, onupdate=datetime.now)
+
+    member = relationship("Member")
+
+
 class AnnualRenewal(Base):
     __tablename__ = "annual_renewals"
     __table_args__ = (UniqueConstraint("fiscal_year", "member_id"),)
