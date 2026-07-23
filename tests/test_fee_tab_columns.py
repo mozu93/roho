@@ -4,7 +4,7 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QApplication, QCheckBox
 
 from app.database.connection import get_session
-from app.database.models import Base, Member
+from app.database.models import Base, AnnualFeeRecord, InsuranceEntry, Member
 from app.services.fee_service import FeeService
 from app.ui.fee_tab import COL_INDEX, FeeTab
 from app.utils.app_config import AppConfig
@@ -78,3 +78,32 @@ def test_fee_tab_selects_reminder_email_recipients(engine, qapp):
         tab._table.cellWidget(row, 0).findChild(QCheckBox).isChecked()
         for row in range(tab._table.rowCount())
     )
+
+
+def test_inline_premium_edit_saves_and_blank_sorts_last(engine, qapp):
+    with get_session(engine) as session:
+        first = Member(
+            member_number="9001", org_name="A社", is_active=True, is_member=True)
+        first.insurance_entries.append(InsuranceEntry(
+            ins_type="ippan", branch_number="0", ins_number="101"))
+        second = Member(
+            member_number="9002", org_name="B社", is_active=True, is_member=True)
+        second.insurance_entries.append(InsuranceEntry(
+            ins_type="ippan", branch_number="0", ins_number="102"))
+        session.add_all([first, second])
+    FeeService(engine).generate_records(2026)
+    tab = FeeTab(engine, AppConfig(last_staff_name="テスト"), None)
+    premium_col = COL_INDEX["概算保険料（0）"]
+
+    tab._table.item(0, premium_col).setText("120000")
+
+    with get_session(engine) as session:
+        saved = session.query(AnnualFeeRecord).join(Member).filter(
+            Member.org_name == "A社").one()
+        assert saved.premium_branch_0 == 120000
+    assert tab._table.item(0, COL_INDEX["概算保険料合計"]).text() == "120,000"
+
+    tab._table.sortItems(premium_col, Qt.SortOrder.AscendingOrder)
+    assert tab._table.item(tab._table.rowCount() - 1, premium_col).text() == ""
+    tab._table.sortItems(premium_col, Qt.SortOrder.DescendingOrder)
+    assert tab._table.item(tab._table.rowCount() - 1, premium_col).text() == ""

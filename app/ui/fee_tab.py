@@ -4,29 +4,42 @@ from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QComboBox, QLineEdit, QPushButton,
     QTableWidget, QTableWidgetItem, QAbstractItemView, QHeaderView,
     QLabel, QMessageBox, QInputDialog, QFileDialog, QTableView, QFrame,
-    QMenu, QDialog, QGridLayout, QCheckBox, QApplication,
+    QMenu, QDialog, QGridLayout, QCheckBox, QApplication, QStyledItemDelegate,
 )
-from PyQt6.QtCore import QEvent, Qt
-from PyQt6.QtGui import QFont
+from PyQt6.QtCore import QEvent, Qt, QTimer, pyqtSignal
+from PyQt6.QtGui import QFont, QIntValidator
 from app.services.fee_service import FeeService
 from app.services.fee_export_service import FeeExportService
 from app.services.activity_service import ActivityService
 from app.services.member_service import INS_TYPES
 from app.ui.dialogs.fee_edit_dialog import FeeEditDialog
 from app.ui.dialogs.quick_premium_input_dialog import QuickPremiumInputDialog
+from app.ui.dialogs.debit_result_dialog import DebitResultDialog
 from app.ui.member_tab import _CheckHeader, _FrozenCheckDelegate, _FrozenItemDelegate
 
 FILTERS = ["すべて", "未入力", "未入金", "入金済", "1期", "2期", "3期", "請求なし", "非会員", "督促中"]
 BRANCH_COLS = ["枝番0", "枝番2", "枝番4", "枝番5", "枝番6"]
+BRANCH_TYPES = ("ippan", "kensetsu_koyou", "ringyo", "kensetsu_genba", "kensetsu_jimusho")
+PREMIUM_FIELDS = (
+    "premium_branch_0", "premium_branch_2", "premium_branch_4",
+    "premium_branch_5", "premium_branch_6",
+)
+PREMIUM_COLS = [f"概算保険料（{number}）" for number in ("0", "2", "4", "5", "6")]
+BRANCH_PREMIUM_COLS = [
+    column
+    for pair in zip(BRANCH_COLS, PREMIUM_COLS)
+    for column in pair
+]
 COLS = [
     "", "管理No.", "会員No.", "事業所名", "フリガナ", "所属・役職", "代表者名", "代表者フリガナ",
     "メール", "市外局番", "電話番号", "FAX市外局番", "FAX", "郵便番号", "住所",
     "郵送先郵便番号", "郵送先住所", "郵送先事業所名", "郵送先所属・役職名", "郵送先氏名",
     "雇用保険事業所番号",
-] + BRANCH_COLS + [
+] + BRANCH_PREMIUM_COLS + [
     "特別", "継続一括", "登録日", "最終更新日", "最終対応日", "メモ",
     "振込先金融機関", "振込先支店", "預金種目", "口座番号", "受取人名カナ",
-    "会員区分", "概算保険料合計", "請求合計", "支払時期", "支払方法", "入金額", "入金日", "督促状況",
+    "会員区分", "概算保険料合計", "請求合計", "支払時期", "支払方法",
+    "1期振替結果", "2期振替結果", "入金額", "入金日", "督促状況",
 ]
 COL_INDEX = {name: index for index, name in enumerate(COLS)}
 _COL_SELECT = COL_INDEX[""]
@@ -37,9 +50,6 @@ DEFAULT_HIDDEN_COLS = {
     "最終更新日", "最終対応日", "メモ", "振込先金融機関", "振込先支店",
     "預金種目", "口座番号", "受取人名カナ",
 }
-BRANCH_TYPES = ("ippan", "kensetsu_koyou", "ringyo", "kensetsu_genba", "kensetsu_jimusho")
-
-
 def _aggregate_sort_key(record):
     """年度更新タブと同じく、枝番の保険番号順で事業所を集約する。"""
     entries = {entry.ins_type: entry.ins_number for entry in record.member.insurance_entries}
@@ -55,15 +65,58 @@ def _aggregate_sort_key(record):
 
 
 class FeeSortableTableWidgetItem(QTableWidgetItem):
-    """金額列を桁区切り付きでも数値として並び替える。"""
+    """数値列を数値順にし、空白は昇順・降順とも末尾に並べる。"""
 
     def __lt__(self, other):
         if not isinstance(other, QTableWidgetItem):
             return super().__lt__(other)
+        left = self.text().strip()
+        right = other.text().strip()
+        ascending = True
+        table = self.tableWidget()
+        if table:
+            ascending = (
+                table.horizontalHeader().sortIndicatorOrder()
+                == Qt.SortOrder.AscendingOrder
+            )
+        if not left and not right:
+            return False
+        if not left:
+            return not ascending
+        if not right:
+            return ascending
         try:
-            return float(self.text().replace(",", "")) < float(other.text().replace(",", ""))
+            return float(left.replace(",", "")) < float(right.replace(",", ""))
         except ValueError:
-            return self.text() < other.text()
+            return left < right
+
+
+class _PremiumDelegate(QStyledItemDelegate):
+    """概算保険料を数字だけで編集し、Enter後の下方向移動を通知する。"""
+    enter_pressed = pyqtSignal(int, int)
+
+    def createEditor(self, parent, option, index):
+        editor = QLineEdit(parent)
+        editor.setValidator(QIntValidator(0, 2_147_483_647, editor))
+        editor.setAlignment(Qt.AlignmentFlag.AlignRight)
+        editor.returnPressed.connect(
+            lambda e=editor, record_id=index.data(Qt.ItemDataRole.UserRole),
+            column=index.column(): self._commit_and_advance(
+                e, record_id, column))
+        return editor
+
+    def setEditorData(self, editor, index):
+        editor.setText(str(index.data() or "").replace(",", ""))
+        editor.selectAll()
+
+    def setModelData(self, editor, model, index):
+        model.setData(index, editor.text().strip())
+
+    def _commit_and_advance(self, editor, record_id, column):
+        self.commitData.emit(editor)
+        self.closeEditor.emit(editor, QStyledItemDelegate.EndEditHint.NoHint)
+        QTimer.singleShot(
+            0, lambda: self.enter_pressed.emit(record_id, column))
 
 
 class FeeTab(QWidget):
@@ -79,6 +132,7 @@ class FeeTab(QWidget):
         self._last_checked_member_id: int = -1
         self._member_row_map: dict[int, int] = {}
         self._resizing_programmatically = False
+        self._filling_table = False
         self._freeze_col = self._get_staff_setting("fee_freeze_col", -1)
         self._build_ui()
         self._apply_column_visibility()
@@ -125,6 +179,9 @@ class FeeTab(QWidget):
         quick_input_btn = QPushButton("概算保険料を連続入力")
         quick_input_btn.clicked.connect(self._on_quick_premium_input)
         top_row.addWidget(quick_input_btn)
+        debit_result_btn = QPushButton("口座振替結果（1期・2期）")
+        debit_result_btn.clicked.connect(self._on_debit_results)
+        top_row.addWidget(debit_result_btn)
         export_btn = QPushButton("Excel出力")
         export_btn.clicked.connect(self._on_export)
         top_row.addWidget(export_btn)
@@ -167,6 +224,13 @@ class FeeTab(QWidget):
         header.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         header.customContextMenuRequested.connect(self._show_column_menu)
         self._table.doubleClicked.connect(self._on_row_double_clicked)
+        self._table.cellClicked.connect(self._on_cell_clicked)
+        self._table.itemChanged.connect(self._on_item_changed)
+        self._premium_delegate = _PremiumDelegate(self._table)
+        self._premium_delegate.enter_pressed.connect(self._edit_next_premium)
+        for column_name in PREMIUM_COLS:
+            self._table.setItemDelegateForColumn(
+                COL_INDEX[column_name], self._premium_delegate)
         self._table.installEventFilter(self)
         layout.addWidget(self._table)
 
@@ -249,16 +313,22 @@ class FeeTab(QWidget):
 
     def _refresh(self):
         fiscal_year = self._current_fiscal_year()
+        self._filling_table = True
         self._table.setSortingEnabled(False)
         self._table.setRowCount(0)
         if fiscal_year is None:
             self._table.setSortingEnabled(True)
+            self._filling_table = False
             return
         keyword = self._search_edit.text().strip()
         status_filter = self._filter_combo.currentText()
         if status_filter == "すべて":
             status_filter = None
         records = self._svc.search(fiscal_year, keyword=keyword, status_filter=status_filter)
+        debit_results = {
+            period: self._svc.get_debit_results(fiscal_year, period)
+            for period in ("1期", "2期")
+        }
         if self._get_staff_setting("fee_aggregate_sort_active", False):
             records.sort(key=_aggregate_sort_key)
         self._displayed_records = {record.id: record for record in records}
@@ -306,12 +376,20 @@ class FeeTab(QWidget):
                 "会員区分": "会員" if r.is_member_for_fee else "非会員",
                 "概算保険料合計": f"{r.premium_total:,}", "請求合計": f"{r.total_amount:,}",
                 "支払時期": r.final_payment_period or "", "支払方法": r.payment_method or "",
+                "1期振替結果": self._format_debit_result(
+                    debit_results["1期"].get(r.id)),
+                "2期振替結果": self._format_debit_result(
+                    debit_results["2期"].get(r.id)),
                 "入金額": f"{r.paid_amount:,}" if r.paid_amount else "",
                 "入金日": r.paid_at.strftime("%Y-%m-%d") if r.paid_at else "", "督促状況": r.reminder_status or "",
             }
             for ins_type, column_name in zip(BRANCH_TYPES, BRANCH_COLS):
                 entry = entries.get(ins_type)
                 values[column_name] = entry.ins_number if entry else ""
+            for ins_type, field, column_name in zip(
+                    BRANCH_TYPES, PREMIUM_FIELDS, PREMIUM_COLS):
+                value = getattr(r, field)
+                values[column_name] = f"{value:,}" if value else ""
             for col, column_name in enumerate(COLS):
                 if col == _COL_SELECT:
                     continue
@@ -319,11 +397,23 @@ class FeeTab(QWidget):
                 item = FeeSortableTableWidgetItem(value)
                 if column_name == "管理No.":
                     item.setData(Qt.ItemDataRole.UserRole, r.id)
-                if column_name in ("概算保険料合計", "請求合計", "入金額"):
+                item.setFlags(item.flags() & ~Qt.ItemFlag.ItemIsEditable)
+                if column_name in PREMIUM_COLS:
+                    branch_index = PREMIUM_COLS.index(column_name)
+                    if BRANCH_TYPES[branch_index] in entries:
+                        item.setFlags(item.flags() | Qt.ItemFlag.ItemIsEditable)
+                        item.setData(Qt.ItemDataRole.UserRole, r.id)
+                        item.setToolTip(
+                            "クリックして入力。Enterで同じ枝番の次の事業所へ移動")
+                    else:
+                        item.setBackground(Qt.GlobalColor.lightGray)
+                if column_name in PREMIUM_COLS + [
+                        "概算保険料合計", "請求合計", "入金額"]:
                     item.setTextAlignment(
                         Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
                 self._table.setItem(row, col, item)
         self._restore_table_settings()
+        self._filling_table = False
         self._rebuild_member_row_map()
         all_checked = bool(records) and all(r.member.id in self._checked_ids for r in records)
         self._check_header.set_all_checked(all_checked)
@@ -630,7 +720,68 @@ class FeeTab(QWidget):
         self._table.selectRow(index.row())
         self._on_row_double_clicked(self._table.model().index(index.row(), 0))
 
+    def _on_cell_clicked(self, row: int, column: int):
+        if column not in {COL_INDEX[name] for name in PREMIUM_COLS}:
+            return
+        item = self._table.item(row, column)
+        if item and item.flags() & Qt.ItemFlag.ItemIsEditable:
+            self._table.editItem(item)
+
+    def _on_item_changed(self, item: QTableWidgetItem):
+        premium_columns = {
+            COL_INDEX[name]: field
+            for name, field in zip(PREMIUM_COLS, PREMIUM_FIELDS)
+        }
+        if self._filling_table or item.column() not in premium_columns:
+            return
+        record_id = item.data(Qt.ItemDataRole.UserRole)
+        if not record_id:
+            return
+        raw_value = item.text().replace(",", "").strip()
+        if raw_value and not raw_value.isdigit():
+            QMessageBox.warning(
+                self, "入力エラー", "概算保険料は0以上の整数で入力してください。")
+            self._refresh()
+            return
+        value = int(raw_value) if raw_value else 0
+        try:
+            updated = self._svc.update(
+                record_id, {premium_columns[item.column()]: value})
+        except Exception as error:
+            QMessageBox.critical(self, "保存エラー", str(error))
+            self._refresh()
+            return
+
+        self._filling_table = True
+        self._table.setSortingEnabled(False)
+        item.setText(f"{value:,}" if value else "")
+        self._table.item(
+            item.row(), COL_INDEX["概算保険料合計"]).setText(
+                f"{updated.premium_total:,}")
+        self._table.item(item.row(), COL_INDEX["請求合計"]).setText(
+            f"{updated.total_amount:,}")
+        self._displayed_records[record_id] = updated
+        self._table.setSortingEnabled(True)
+        self._filling_table = False
+
+    def _edit_next_premium(self, record_id: int, column: int):
+        current_row = -1
+        for row in range(self._table.rowCount()):
+            item = self._table.item(row, column)
+            if item and item.data(Qt.ItemDataRole.UserRole) == record_id:
+                current_row = row
+                break
+        for row in range(current_row + 1, self._table.rowCount()):
+            item = self._table.item(row, column)
+            if item and item.flags() & Qt.ItemFlag.ItemIsEditable:
+                self._table.setCurrentCell(row, column)
+                self._table.scrollToItem(item)
+                self._table.editItem(item)
+                return
+
     def _on_row_double_clicked(self, index):
+        if index.column() in {COL_INDEX[name] for name in PREMIUM_COLS}:
+            return
         item = self._table.item(index.row(), COL_INDEX["管理No."])
         if not item:
             return
@@ -682,6 +833,30 @@ class FeeTab(QWidget):
             on_record_saved=self._refresh)
         dialog.exec()
         self._refresh()
+
+    @staticmethod
+    def _format_debit_result(result):
+        if not result:
+            return "未確認"
+        if result["is_paid"]:
+            return "入金済"
+        progress = []
+        if result.get("notified_at"):
+            progress.append("連絡済")
+        if result.get("notice_sent_at"):
+            progress.append("発送済")
+        suffix = f"・{'・'.join(progress)}" if progress else ""
+        return f"不能（{result['failure_reason']}）{suffix}"
+
+    def _on_debit_results(self):
+        fiscal_year = self._current_fiscal_year()
+        if fiscal_year is None:
+            QMessageBox.warning(
+                self, "確認", "先に年度を選択または追加してください。")
+            return
+        if DebitResultDialog(
+                self._engine, fiscal_year, parent=self).exec():
+            self._refresh()
 
     def _visible_unentered_record_ids(self) -> list[int]:
         """現在の一覧表示・並び替え順に、未入力レコードのIDを返す。"""

@@ -4,7 +4,7 @@ from sqlalchemy import func
 from app.database.connection import get_session
 from app.database.models import (
     Member, InsuranceEntry, MemberEmailAddress, MemberChange, ChangeConfirmation, Staff,
-    AnnualFeeRecord,
+    AnnualFeeRecord, FeeDebitResult,
 )
 from app.utils.member_search import member_matches_keyword
 
@@ -180,6 +180,14 @@ class MemberService:
             m = session.get(Member, member_id)
             if not m:
                 return
+            fee_record_ids = [
+                row[0] for row in session.query(AnnualFeeRecord.id)
+                .filter_by(member_id=member_id).all()
+            ]
+            if fee_record_ids:
+                session.query(FeeDebitResult).filter(
+                    FeeDebitResult.annual_fee_record_id.in_(
+                        fee_record_ids)).delete(synchronize_session=False)
             session.query(AnnualFeeRecord).filter_by(member_id=member_id).delete()
             for change in list(m.member_changes):
                 session.delete(change)   # ChangeConfirmation は cascade

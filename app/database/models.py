@@ -294,6 +294,32 @@ class AnnualFeeRecord(Base):
     updated_at = Column(DateTime, nullable=False, default=datetime.now, onupdate=datetime.now)
 
     member = relationship("Member")
+    debit_results = relationship(
+        "FeeDebitResult", back_populates="fee_record",
+        cascade="all, delete-orphan",
+    )
+
+
+class FeeDebitResult(Base):
+    """口座振替結果。不能先だけを登録し、それ以外は入金済として保持する。"""
+    __tablename__ = "fee_debit_results"
+    __table_args__ = (
+        UniqueConstraint("annual_fee_record_id", "period"),
+    )
+
+    id = Column(Integer, primary_key=True)
+    annual_fee_record_id = Column(
+        Integer, ForeignKey("annual_fee_records.id"), nullable=False)
+    period = Column(String, nullable=False)  # 1期 / 2期
+    is_paid = Column(Boolean, nullable=False, default=True)
+    failure_reason = Column(String)
+    confirmed_at = Column(Date, nullable=False)
+    notified_at = Column(Date)
+    notice_sent_at = Column(Date)
+    updated_at = Column(
+        DateTime, nullable=False, default=datetime.now, onupdate=datetime.now)
+
+    fee_record = relationship("AnnualFeeRecord", back_populates="debit_results")
 
 
 class RefundTransferRecord(Base):

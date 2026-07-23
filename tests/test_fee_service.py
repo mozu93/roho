@@ -1,7 +1,9 @@
 import pytest
 from datetime import date
 from sqlalchemy import create_engine
-from app.database.models import Base, Member, AnnualFeeRule, AnnualFeeRecord
+from app.database.models import (
+    Base, Member, InsuranceEntry, AnnualFeeRule, AnnualFeeRecord,
+)
 from app.database.connection import get_session
 from app.services.fee_service import calculate_fee, determine_payment_period, FeeService
 
@@ -243,6 +245,64 @@ def test_update_sets_reminder_completed_when_paid(svc):
     assert updated.reminder_status == "完了"
 
 
+def test_confirm_debit_results_marks_failures_and_all_others_paid(svc):
+    with get_session(svc._engine) as session:
+        session.add_all([
+            Member(member_number="9001", org_name="不能社", is_active=True),
+            Member(member_number="9002", org_name="入金社", is_active=True),
+        ])
+    svc.generate_records(2026)
+    records = svc.search(2026)
+    failed_id = next(
+        record.id for record in records if record.member.org_name == "不能社")
+
+    count = svc.confirm_debit_results(2026, "1期", {
+        failed_id: {
+            "failure_reason": "資金不足",
+            "notified_at": date(2026, 7, 20),
+            "notice_sent_at": date(2026, 7, 21),
+        },
+    }, confirmed_at=date(2026, 7, 19))
+
+    assert count == 2
+    results = svc.get_debit_results(2026, "1期")
+    assert results[failed_id]["is_paid"] is False
+    assert results[failed_id]["failure_reason"] == "資金不足"
+    assert results[failed_id]["notified_at"] == date(2026, 7, 20)
+    paid = next(value for key, value in results.items() if key != failed_id)
+    assert paid["is_paid"] is True
+    assert paid["failure_reason"] is None
+
+
+def test_confirm_debit_results_keeps_periods_independent(svc):
+    with get_session(svc._engine) as session:
+        session.add(Member(
+            member_number="9001", org_name="対象社", is_active=True))
+    svc.generate_records(2026)
+    record_id = svc.search(2026)[0].id
+
+    svc.confirm_debit_results(2026, "1期", {
+        record_id: {"failure_reason": "預金取引なし"},
+    })
+    svc.confirm_debit_results(2026, "2期", {})
+
+    assert svc.get_debit_results(2026, "1期")[record_id]["is_paid"] is False
+    assert svc.get_debit_results(2026, "2期")[record_id]["is_paid"] is True
+
+
+def test_confirm_debit_results_rejects_invalid_reason(svc):
+    with get_session(svc._engine) as session:
+        session.add(Member(
+            member_number="9001", org_name="対象社", is_active=True))
+    svc.generate_records(2026)
+    record_id = svc.search(2026)[0].id
+
+    with pytest.raises(ValueError, match="不能理由"):
+        svc.confirm_debit_results(2026, "1期", {
+            record_id: {"failure_reason": "理由不明"},
+        })
+
+
 def test_recalculate_all_applies_new_rule(svc):
     with get_session(svc._engine) as session:
         session.add(Member(member_number="9001", org_name="A社", is_active=True, is_member=True))
@@ -270,6 +330,24 @@ def test_search_by_keyword(svc):
     results = svc.search(2026, keyword="テスト")
     assert len(results) == 1
     assert results[0].member.org_name == "㈱テスト商事"
+
+
+def test_search_loads_insurance_entries_for_inline_premium_columns(svc):
+    with get_session(svc._engine) as session:
+        member = Member(
+            member_number="9001", org_name="枝番表示社",
+            is_active=True, is_member=True,
+        )
+        member.insurance_entries.append(InsuranceEntry(
+            ins_type="ippan", branch_number="0", ins_number="123",
+        ))
+        session.add(member)
+    svc.generate_records(2026)
+
+    records = svc.search(2026)
+
+    # search()のセッション終了後も一覧が枝番を表示・判定できる。
+    assert records[0].member.insurance_entries[0].ins_number == "123"
 
 
 def test_search_filter_non_member(svc):

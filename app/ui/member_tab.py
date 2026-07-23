@@ -110,23 +110,15 @@ class _SelectionDelegate(QStyledItemDelegate):
             else:
                 painter.fillRect(option.rect, option.palette.base())
             painter.fillRect(option.rect, self._OVERLAY)
-            text = index.data(Qt.ItemDataRole.DisplayRole)
-            if text:
-                font = QFont(option.font)
-                font.setBold(True)
-                painter.setFont(font)
-                painter.setPen(QColor(15, 23, 42))
-                raw_align = index.data(Qt.ItemDataRole.TextAlignmentRole)
-                align = Qt.AlignmentFlag(int(raw_align)) if raw_align is not None \
-                    else Qt.AlignmentFlag.AlignLeft
-                if not (align & Qt.AlignmentFlag.AlignVertical_Mask):
-                    align |= Qt.AlignmentFlag.AlignVCenter
-                painter.drawText(
-                    option.rect.adjusted(4, 0, -4, 0),
-                    align,
-                    str(text),
-                )
             painter.restore()
+
+            # 背景だけを独自描画し、文字・アイコン・余白・省略表示は
+            # Qt の標準デリゲートに任せる。手動の太字描画では、狭い列の
+            # 文字が縦線のように切れて表示されることがある。
+            option.state &= ~QStyle.StateFlag.State_Selected
+            option.state &= ~QStyle.StateFlag.State_HasFocus
+            option.backgroundBrush = QBrush(Qt.BrushStyle.NoBrush)
+            super().paint(painter, option, index)
         else:
             super().paint(painter, option, index)
 

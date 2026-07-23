@@ -1,12 +1,15 @@
 import math
 from datetime import date, datetime
 from app.database.connection import get_session
-from app.database.models import AnnualFeeRule, AnnualFeeRecord, Member
+from app.database.models import (
+    AnnualFeeRule, AnnualFeeRecord, FeeDebitResult, Member,
+)
 
 BRANCH_KEYS = ("branch_0", "branch_2", "branch_4", "branch_5", "branch_6")
 PAYMENT_METHODS = ["口座振替", "振込", "持参"]
 PAYMENT_PERIODS = ["1期", "2期", "3期", "請求なし"]
 REMINDER_STATUSES = ["未督促", "督促済", "再督促予定", "完了"]
+DEBIT_FAILURE_REASONS = ["資金不足", "預金取引なし", "その他"]
 
 
 def calculate_fee(premiums: dict, is_member: bool, rule: AnnualFeeRule) -> dict:
@@ -209,6 +212,70 @@ class FeeService:
                 if not record.payment_period_override_reason:
                     record.final_payment_period = record.auto_payment_period
                 record.updated_at = datetime.now()
+            return len(records)
+
+    def get_debit_results(self, fiscal_year: int, period: str) -> dict:
+        if period not in ("1期", "2期"):
+            raise ValueError("口座振替の期は1期または2期を指定してください。")
+        with get_session(self._engine) as session:
+            rows = (
+                session.query(FeeDebitResult)
+                .join(AnnualFeeRecord)
+                .filter(
+                    AnnualFeeRecord.fiscal_year == fiscal_year,
+                    FeeDebitResult.period == period,
+                ).all()
+            )
+            return {
+                row.annual_fee_record_id: {
+                    "is_paid": row.is_paid,
+                    "failure_reason": row.failure_reason,
+                    "confirmed_at": row.confirmed_at,
+                    "notified_at": row.notified_at,
+                    "notice_sent_at": row.notice_sent_at,
+                }
+                for row in rows
+            }
+
+    def confirm_debit_results(
+            self, fiscal_year: int, period: str, failures: dict,
+            confirmed_at: date | None = None) -> int:
+        """不能先を登録し、未指定の全事業所を入金済として確定する。"""
+        if period not in ("1期", "2期"):
+            raise ValueError("口座振替の期は1期または2期を指定してください。")
+        confirmed_at = confirmed_at or date.today()
+        with get_session(self._engine) as session:
+            records = session.query(AnnualFeeRecord).filter(
+                AnnualFeeRecord.fiscal_year == fiscal_year).all()
+            record_ids = {record.id for record in records}
+            unknown_ids = set(failures) - record_ids
+            if unknown_ids:
+                raise ValueError("対象年度に存在しない事業所が含まれています。")
+            for record in records:
+                data = failures.get(record.id)
+                result = session.query(FeeDebitResult).filter_by(
+                    annual_fee_record_id=record.id, period=period).one_or_none()
+                if result is None:
+                    result = FeeDebitResult(
+                        annual_fee_record_id=record.id, period=period,
+                        confirmed_at=confirmed_at,
+                    )
+                    session.add(result)
+                result.confirmed_at = confirmed_at
+                result.updated_at = datetime.now()
+                if data is None:
+                    result.is_paid = True
+                    result.failure_reason = None
+                    result.notified_at = None
+                    result.notice_sent_at = None
+                    continue
+                reason = data.get("failure_reason")
+                if reason not in DEBIT_FAILURE_REASONS:
+                    raise ValueError("不能理由を選択してください。")
+                result.is_paid = False
+                result.failure_reason = reason
+                result.notified_at = data.get("notified_at")
+                result.notice_sent_at = data.get("notice_sent_at")
             return len(records)
 
     def search(self, fiscal_year: int, keyword: str = "", status_filter: str = None) -> list:
